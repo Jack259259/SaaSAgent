@@ -6,7 +6,7 @@
 > "NOT IMPLEMENTED (see PROGRESS.md)" 并以非零码结束,随对应阶段转为真实现。
 
 - [x] 阶段 0:仓库初始化与工程底座(2026-06-13)—— DoD:`make lint && make test` 真实全绿并贴输出;git status 干净;commit `feat(repo)`。
-- [ ] 阶段 1:契约层(框架无关的接缝)—— DoD:`make lint && make test && make contract-test` 全绿(contract-test 真实现:21 份工具规格 + 信封 user_ctx 负例 + schema 正反例);commit `feat(contracts)`。
+- [x] 阶段 1:契约层(框架无关的接缝)(2026-06-13)—— DoD:`make lint && make test && make contract-test` 全绿(contract-test 真实现:21 份工具规格 + 信封 user_ctx 负例 + schema 正反例 + 模型↔schema 一致性 + docs 不漂移);commit `feat(contracts)`。
 - [ ] 阶段 2:LLM 网关 + 编排器薄循环 + SSE 网关 —— DoD:`make lint && make test` 全绿(含 e2e:SSE 事件序列、无 user_ctx 拒绝 + 审计);commit `feat(orchestrator)`。
 - [ ] 阶段 3:Plan&Execute + 行内反思 + 基础工具第一批(7 件)—— DoD:`make lint && make test` 全绿(计划/确认暂停恢复/replan/ask_user 集成用例);commit `feat(orchestrator)`。
 - [ ] 阶段 4:sandbox-svc(run_analysis 受限沙箱)—— DoD:`make lint && make test` 全绿且红线 11 负例全过(断网/越界读/超时/超内存/import 白名单);commit `feat(sandbox)`。

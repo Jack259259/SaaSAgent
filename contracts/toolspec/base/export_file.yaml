@@ -1,0 +1,21 @@
+name: export_file
+description: 生成交付物(Excel / PDF / 报告模板),产物入工作区,审计留痕(只读副作用)。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [format, source_ref]
+  properties:
+    format: { type: string, enum: [xlsx, pdf, md] }
+    source_ref: { type: string }
+    template: { type: string }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    ref: { type: string }
+permission_scope: base.file.export
+side_effects: read
+confirmation_required: false
+timeout_ms: 30000
+errors: [UNSUPPORTED, VALIDATION_FAILED]
+version: 0.1.0

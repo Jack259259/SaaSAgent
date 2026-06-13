@@ -1,0 +1,25 @@
+name: list_schedules
+description: 列出当前用户的定时订阅任务(只读)。
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    active_only: { type: boolean }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    schedules:
+      type: array
+      items:
+        type: object
+        properties:
+          schedule_id: { type: string }
+          cron: { type: string }
+          active: { type: boolean }
+permission_scope: base.schedule.list
+side_effects: read
+confirmation_required: false
+timeout_ms: 10000
+errors: [VALIDATION_FAILED]
+version: 0.1.0

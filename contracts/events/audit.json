@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zijin:audit",
+  "title": "AuditEvent",
+  "description": "审计事件 schema(方案 §9.2 / 红线 4)。每次工具调用与助手域副作用必发。禁止原文/敏感数据(§6)。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["who", "tool", "args_digest", "result_status", "trace_id", "ts"],
+  "properties": {
+    "who": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenant_id", "user_id", "roles"],
+      "description": "调用者身份(user_ctx 子集)",
+      "properties": {
+        "tenant_id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "roles": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "tool": { "type": "string", "description": "被调用的工具名" },
+    "args_digest": {
+      "type": "string",
+      "description": "入参脱敏摘要(哈希或裁剪);严禁记录原文、密钥、token、SQL 结果明细(§6)"
+    },
+    "result_status": { "type": "string", "enum": ["ok", "error", "denied", "timeout"] },
+    "trace_id": { "type": "string" },
+    "ts": { "type": "string", "format": "date-time" },
+    "error_code": { "$ref": "urn:zijin:toolspec#/$defs/errorCode" },
+    "latency_ms": { "type": "integer", "minimum": 0 }
+  }
+}

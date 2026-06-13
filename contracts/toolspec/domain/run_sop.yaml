@@ -1,0 +1,22 @@
+name: run_sop
+description: 提交执行某 SOP(对业务系统的写操作,确定性状态机执行)。红线 4:必须确认(双闸)。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [sop_id, inputs]
+  properties:
+    sop_id: { type: string }
+    inputs: { type: object }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    run_id: { type: string }
+    status: { type: string, enum: [pending, running, paused, succeeded, failed] }
+    report_ref: { type: string }
+permission_scope: sop.write.run
+side_effects: write
+confirmation_required: true
+timeout_ms: 120000
+errors: [NO_PERMISSION, CONFIRMATION_REQUIRED, NOT_FOUND, TIMEOUT, VALIDATION_FAILED]
+version: 0.1.0

@@ -1,0 +1,22 @@
+name: save_memory
+description: 当场写入用户偏好 / 口径(如"以后都用万元")。写入门槛 + 脱敏(§7.2/7.3);用户可见可删(助手域写)。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [content]
+  properties:
+    content: { type: string }
+    scope: { type: string, enum: [profile, preference, glossary] }
+    importance: { type: number, minimum: 0, maximum: 1 }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    memory_id: { type: string }
+    stored: { type: boolean }
+permission_scope: base.memory.save
+side_effects: assistant_write
+confirmation_required: false
+timeout_ms: 10000
+errors: [VALIDATION_FAILED]
+version: 0.1.0

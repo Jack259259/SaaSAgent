@@ -4,6 +4,7 @@
 > 维护规则:保持 ≤250 行,只放"每次会话都需要"的内容;细节放 docs/ 与各目录 CLAUDE.md,按需读取。约定变更时,在同一 PR 内更新本文件。
 > v0.2(2026-06-13):新增基础工具基线 13 件(§5)与 sandbox-svc / scheduler-svc;红线 4 范围澄清,新增红线 11–13。
 > v0.3(2026-06-13):技术栈落定(§4:Python 3.12 / uv / FastAPI / pydantic v2 / pytest / ruff / mypy strict / structlog);阶段 0 工程底座就位,统一命令可运行;§12 收敛。
+> v0.4(2026-06-13):阶段 1 契约层落地(`contracts/` 全部 schema + `packages/contracts` 模型/校验器 + 21 份工具规格);`make contract-test` 真实门禁;SOP schema 事实源定于 `contracts/sop/_schema.yaml`;ToolSpec 字段统一为 `timeout_ms`。
 
 ## 1. 项目概述
 
@@ -79,10 +80,10 @@ make sop-validate    # assets/sops schema 校验 + 静态交叉校验
 
 ## 5. 核心契约(改动最敏感的文件)
 
-- `contracts/toolspec/`:每个工具一份定义(name / description / input_schema / output_schema / permission_scope / side_effects / confirmation_required / timeout / errors)。修改 = 升 semver + `make contract-test` + 同步 evals 用例 + PR 描述列出受影响服务。
+- `contracts/toolspec/`:每个工具一份定义(name / description / input_schema / output_schema / permission_scope / side_effects(read|write|assistant_write)/ confirmation_required / timeout_ms / errors)。`_schema.json` 为 ToolSpec 的 JSON Schema、`envelope.json` 为调用信封(必含 user_ctx)。修改 = 升 semver + `make contract-test` + 同步 evals 用例 + PR 描述列出受影响服务。
 - `contracts/toolspec/base/`:**基础工具基线 v0.2(13 件,清单与治理见方案 §5.5)**:update_plan、ask_user、get_page_context、read_workspace、write_workspace、run_analysis、export_file、parse_user_file、save_memory、schedule_task 系、notify、escalate_to_human、web_search/web_fetch(默认关)。副作用分级与门控见红线 4 / 11–13。
 - `contracts/agent-state/`:编排状态 schema,orchestrator 与持久化共用,改动需双端评审。
-- `assets/sops/_schema.yaml`:SOP 资产 schema;改 schema 必须先全量 `make sop-validate`。
+- `contracts/sop/_schema.yaml`:SOP 资产 schema(事实源;实例在 `assets/sops/`);改 schema 必须先全量 `make sop-validate`。
 
 ## 6. 编码与提交规范
 

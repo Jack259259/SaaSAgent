@@ -1,0 +1,21 @@
+name: parse_user_file
+description: 解析用户上传的 Excel / PDF / CSV(计划草稿、银行回单)入工作区。类型 / 大小白名单、按租户隔离存储。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [file_ref]
+  properties:
+    file_ref: { type: string }
+    kind: { type: string, enum: [xlsx, csv, pdf] }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    ref: { type: string }
+    summary: { type: string }
+permission_scope: base.file.parse
+side_effects: read
+confirmation_required: false
+timeout_ms: 30000
+errors: [UNSUPPORTED, VALIDATION_FAILED]
+version: 0.1.0

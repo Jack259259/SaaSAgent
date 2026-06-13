@@ -1,0 +1,21 @@
+name: notify
+description: 模板化推送(站内信 / 邮件 / IM)。仅白名单模板、订阅制、频控(助手域写,不触达业务数据)。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [template_id, channel]
+  properties:
+    template_id: { type: string }
+    channel: { type: string, enum: [inapp, email, im] }
+    params: { type: object }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    delivered: { type: boolean }
+permission_scope: base.notify.send
+side_effects: assistant_write
+confirmation_required: false
+timeout_ms: 15000
+errors: [NOT_CONFIGURED, RATE_LIMITED, VALIDATION_FAILED]
+version: 0.1.0

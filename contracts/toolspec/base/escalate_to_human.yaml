@@ -1,0 +1,21 @@
+name: escalate_to_human
+description: 转人工:生成工单 + 完整上下文移交。移交内容按接收方权限脱敏(助手域写)。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [summary]
+  properties:
+    summary: { type: string }
+    context_refs: { type: array, items: { type: string } }
+    priority: { type: string, enum: [low, normal, high, urgent] }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    ticket_id: { type: string }
+permission_scope: base.escalation.create
+side_effects: assistant_write
+confirmation_required: false
+timeout_ms: 15000
+errors: [VALIDATION_FAILED]
+version: 0.1.0

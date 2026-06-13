@@ -1,0 +1,27 @@
+name: find_sop
+description: 按别名 / 语义检索可用 SOP(只读)。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [query]
+  properties:
+    query: { type: string }
+    top_k: { type: integer, minimum: 1, maximum: 20 }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    matches:
+      type: array
+      items:
+        type: object
+        properties:
+          id: { type: string }
+          name: { type: string }
+          score: { type: number }
+permission_scope: sop.read.find
+side_effects: read
+confirmation_required: false
+timeout_ms: 10000
+errors: [NO_PERMISSION, NOT_FOUND, TIMEOUT, VALIDATION_FAILED]
+version: 0.1.0

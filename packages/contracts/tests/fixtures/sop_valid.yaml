@@ -1,0 +1,35 @@
+# 合法 SOP 正例(虚构,仅用于契约测试,严禁混入真实业务)。
+id: finance.create-plan-draft
+name: 创建资金计划草稿
+description: 在资金计划页创建一条计划草稿并提交(演示用)。
+aliases: [新建计划, 计划草稿]
+domain: finance_plan
+side_effects: write
+requires_confirmation: true
+preconditions:
+  permissions: [data.write.finance_plan]
+  prerequisite_state: 已选择归属机构
+  blocking_when: 当月计划已锁定
+entry:
+  route: /finance/plan/new
+  page_title: 资金计划-新建
+inputs:
+  - { key: org_unit, label: 归属机构, type: string, required: true }
+  - { key: amount, label: 计划金额(万元), type: number, required: true, validation: ">0" }
+api:
+  calls:
+    - method: POST
+      path: /api/finance/plan/draft
+      body: { org_unit: "{{org_unit}}", amount: "{{amount}}" }
+      capture: { draft_id: "$.id" }
+postconditions:
+  human_readable: 草稿创建成功并返回 draft_id
+  verify:
+    api: { method: GET, path: "/api/finance/plan/draft/{{draft_id}}" }
+    expect: { status: draft }
+on_failure:
+  - { when: 金额超出授权额度, hint: 提示用户金额需在授权额度内 }
+meta:
+  owner: finance-platform
+  version: 0.1.0
+  source: 预发租户录制

@@ -1,0 +1,22 @@
+name: run_analysis
+description: 沙箱内执行生成代码,对工作区数据透视 / 统计 / 绘图。红线 11 强隔离:无网络、无库连接、资源限额、产物回句柄。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [code]
+  properties:
+    code: { type: string }
+    input_handles: { type: array, items: { type: string } }
+    timeout_s: { type: integer, minimum: 1, maximum: 120 }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    stdout: { type: string, description: 截断后的标准输出 }
+    artifacts: { type: array, items: { type: string }, description: 产物句柄 }
+permission_scope: base.analysis.run
+side_effects: read
+confirmation_required: false
+timeout_ms: 130000
+errors: [SANDBOX_VIOLATION, TIMEOUT, VALIDATION_FAILED]
+version: 0.1.0

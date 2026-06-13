@@ -1,0 +1,22 @@
+name: write_workspace
+description: 向工作区写笔记 / 草稿 / 中间文档("文件即记忆")。虚拟存储、租户隔离,非真实文件系统(助手域写)。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [key, content]
+  properties:
+    key: { type: string }
+    type: { type: string }
+    content: { type: string }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    ref: { type: string }
+    summary: { type: string }
+permission_scope: base.workspace.write
+side_effects: assistant_write
+confirmation_required: false
+timeout_ms: 10000
+errors: [VALIDATION_FAILED]
+version: 0.1.0

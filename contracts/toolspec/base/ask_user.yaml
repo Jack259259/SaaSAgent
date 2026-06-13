@@ -1,0 +1,27 @@
+name: ask_user
+description: 结构化澄清(选项卡片)。一次 ≤3 问;能从上下文推断的不问。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [questions]
+  properties:
+    questions:
+      type: array
+      maxItems: 3
+      items:
+        type: object
+        required: [question]
+        properties:
+          question: { type: string }
+          options: { type: array, items: { type: string } }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    answers: { type: object }
+permission_scope: base.user.ask
+side_effects: read
+confirmation_required: false
+timeout_ms: 600000
+errors: [TIMEOUT, VALIDATION_FAILED]
+version: 0.1.0

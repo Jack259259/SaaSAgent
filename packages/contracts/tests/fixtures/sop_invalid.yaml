@@ -1,0 +1,9 @@
+# 非法 SOP 负例:缺 postconditions / on_failure(required),且 api 与 ui 均无(违反 anyOf)。
+id: bad.sop
+name: 残缺 SOP
+description: 故意缺字段,用于契约负例
+preconditions: {}
+inputs: []
+meta:
+  owner: x
+  version: 0.1.0

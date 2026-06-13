@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zijin:envelope",
+  "title": "ToolInvocation",
+  "description": "工具调用信封。红线 3:user_ctx 必含且随每次调用透传,工具侧二次校验;缺 user_ctx 即非法。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["trace_id", "tool", "args", "user_ctx"],
+  "properties": {
+    "trace_id": { "type": "string", "minLength": 1, "description": "全链路追踪 ID(贯穿网关→编排→工具→子 Agent)" },
+    "tool": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "目标工具名" },
+    "args": { "type": "object", "description": "工具入参;运行时按该工具 input_schema 校验" },
+    "user_ctx": { "$ref": "#/$defs/userCtx" },
+    "confirmation": {
+      "$ref": "#/$defs/confirmation",
+      "description": "写工具的二次确认凭据(红线 4 第二闸:executor 侧再验)"
+    },
+    "ts": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "userCtx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenant_id", "user_id", "roles", "data_scope"],
+      "description": "零信任身份上下文(§9.2)。",
+      "properties": {
+        "tenant_id": { "type": "string", "minLength": 1 },
+        "user_id": { "type": "string", "minLength": 1 },
+        "roles": { "type": "array", "items": { "type": "string" }, "description": "可为空数组(无角色=无权限)" },
+        "data_scope": { "type": "object", "description": "数据范围谓词占位(如 {regions:[], org_units:[]})" },
+        "permissions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["confirmed", "token"],
+      "properties": {
+        "confirmed": { "type": "boolean" },
+        "token": { "type": "string", "description": "orchestrator 签发的确认凭据" }
+      }
+    }
+  }
+}

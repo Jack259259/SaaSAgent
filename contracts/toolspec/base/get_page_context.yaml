@@ -1,0 +1,21 @@
+name: get_page_context
+description: 读用户当前页面路由 / 单据 ID / 选中行等结构化上下文(前端注入,按 user_ctx 过滤),支撑"这张单"类指代消解。
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    fields: { type: array, items: { type: string } }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    route: { type: string }
+    record_id: { type: string }
+    selection: { type: object }
+    raw_ref: { type: string }
+permission_scope: base.page.read_context
+side_effects: read
+confirmation_required: false
+timeout_ms: 5000
+errors: [NO_PERMISSION, VALIDATION_FAILED]
+version: 0.1.0

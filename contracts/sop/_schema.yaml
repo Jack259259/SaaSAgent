@@ -1,0 +1,139 @@
+# SOP 资产 schema(方案附录 B 全量)。JSON Schema(Draft 2020-12),以 YAML 书写。
+# 事实源在此(contracts/sop/);SOP 实例落 assets/sops/*.yaml(阶段 8)。
+# make sop-validate(阶段 8)在本 schema 之上再做静态交叉校验(占位符闭合、confirm 一致等)。
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "urn:zijin:sop"
+title: Sop
+description: 页面操作 SOP 资产 schema(方案 §5.4 / 附录 B)。
+type: object
+additionalProperties: false
+required: [id, name, description, preconditions, inputs, postconditions, on_failure, meta]
+# api 与 ui 至少其一存在(确定性执行:优先 api,无 api 走 ui)。
+anyOf:
+  - required: [api]
+  - required: [ui]
+properties:
+  id:
+    type: string
+    pattern: "^[a-z][a-z0-9_.-]*$"
+  name: { type: string }
+  description: { type: string }
+  aliases:
+    type: array
+    items: { type: string }
+    description: find_sop 检索用别名
+  domain: { type: string }
+  side_effects:
+    type: string
+    enum: [read, write]
+  requires_confirmation:
+    type: boolean
+    description: 含写操作步骤时为 true;执行器在 confirm 步暂停(红线 4)
+  preconditions:
+    type: object
+    additionalProperties: false
+    properties:
+      permissions:
+        type: array
+        items: { type: string }
+      prerequisite_state: { type: string }
+      blocking_when: { type: string }
+  entry:
+    type: object
+    additionalProperties: false
+    properties:
+      route: { type: string }
+      page_title: { type: string }
+  inputs:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [key, label, type, required]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        type: { type: string }
+        required: { type: boolean }
+        validation: { type: string }
+        source: { type: string }
+  api:
+    type: object
+    additionalProperties: false
+    required: [calls]
+    properties:
+      calls:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [method, path]
+          properties:
+            method:
+              type: string
+              enum: [GET, POST, PUT, PATCH, DELETE]
+            path: { type: string }
+            body:
+              type: object
+              description: 请求体,可含 {{占位符}}(占位符闭合性由 sop-validate 交叉校验)
+            capture:
+              type: object
+              description: 从响应提取并供后续步骤引用的变量
+  ui:
+    type: object
+    additionalProperties: false
+    required: [steps]
+    properties:
+      steps:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [instruction, action]
+          properties:
+            instruction: { type: string }
+            target:
+              type: object
+              additionalProperties: false
+              properties:
+                testid: { type: string }
+                role: { type: string }
+                name: { type: string }
+            action: { type: string }
+            value: { type: string }
+            confirm:
+              type: boolean
+              description: 该步是否需用户确认(与 requires_confirmation 的一致性由 sop-validate 校验)
+  postconditions:
+    type: object
+    additionalProperties: false
+    required: [human_readable]
+    properties:
+      human_readable: { type: string }
+      verify:
+        type: object
+        additionalProperties: false
+        properties:
+          api: { type: object }
+          expect: { type: object }
+  on_failure:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [when, hint]
+      properties:
+        when: { type: string }
+        hint: { type: string }
+  meta:
+    type: object
+    additionalProperties: false
+    required: [owner, version]
+    properties:
+      related:
+        type: array
+        items: { type: string }
+      source: { type: string }
+      owner: { type: string }
+      updated: { type: string }
+      version: { type: string }

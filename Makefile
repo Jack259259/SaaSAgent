@@ -12,10 +12,8 @@ MAKEFLAGS += --no-print-directory
 
 UV ?= uv
 
-PKGS := packages/common \
-        services/agent-gateway services/orchestrator services/rag-svc services/data-svc \
-        services/code-svc services/sop-executor services/memory-svc services/reflection-worker \
-        services/sandbox-svc services/scheduler-svc
+# 自动发现全部工作区包(packages/* + services/*),新增包无需再改此处。
+PKGS := $(wildcard packages/*) $(wildcard services/*)
 
 MYPY_PATHS := $(foreach p,$(PKGS),$(p)/src $(p)/tests)
 
@@ -53,9 +51,10 @@ lint: sync
 	$(UV) run ruff check .
 	$(UV) run mypy $(MYPY_PATHS)
 
-contract-test:
-	@echo "make contract-test: NOT IMPLEMENTED (see PROGRESS.md)"
-	@exit 2
+# contracts 契约测试(阶段 1 真实现):21 份工具规格合法 + 信封 user_ctx 负例 +
+# AgentState/audit/SOP 正反例 + 模型↔schema 一致性 + docs 不漂移。
+contract-test: sync
+	$(UV) run pytest packages/contracts
 
 # E 必须是 EVAL_SETS 之一;缺失/非法以退出码 1 给出 usage(尚未实现的真实 runner 以退出码 2)。
 eval:

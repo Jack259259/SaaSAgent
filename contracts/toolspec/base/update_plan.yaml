@@ -1,0 +1,29 @@
+name: update_plan
+description: 模型显式创建 / 更新计划与待办,驱动计划卡片(无外部副作用;含业务写步骤仍走确认)。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [steps]
+  properties:
+    steps:
+      type: array
+      items:
+        type: object
+        properties:
+          id: { type: string }
+          goal: { type: string }
+          capability_hint: { type: string }
+          depends_on: { type: array, items: { type: string } }
+          needs_confirmation: { type: boolean }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    version: { type: integer }
+    accepted: { type: boolean }
+permission_scope: base.plan.update
+side_effects: read
+confirmation_required: false
+timeout_ms: 5000
+errors: [VALIDATION_FAILED]
+version: 0.1.0

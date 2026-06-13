@@ -1,0 +1,29 @@
+name: search_knowledge
+description: 面向知识库的语义检索(LightRAG 双库:business / it_design),返回片段与引用(只读)。检索前 ACL 过滤(红线 5)。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [question]
+  properties:
+    question: { type: string }
+    kb: { type: string, enum: [business, it_design] }
+    top_k: { type: integer, minimum: 1, maximum: 50 }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    summary: { type: string }
+    chunks_ref: { type: string, description: 大对象落工作区,返回句柄(红线 8) }
+    citations:
+      type: array
+      items:
+        type: object
+        properties:
+          source: { type: string }
+          location: { type: string }
+permission_scope: knowledge.read.search
+side_effects: read
+confirmation_required: false
+timeout_ms: 20000
+errors: [NO_PERMISSION, NOT_CONFIGURED, TIMEOUT, VALIDATION_FAILED]
+version: 0.1.0

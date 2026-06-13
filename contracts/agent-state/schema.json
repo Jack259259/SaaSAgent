@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zijin:agent-state",
+  "title": "AgentState",
+  "description": "编排运行状态 schema(方案 §4.2)。orchestrator 与持久化共用;改动需双端评审(CLAUDE.md §5)。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ids", "user_ctx", "mode", "messages", "plan", "workspace", "budget", "reflection"],
+  "properties": {
+    "ids": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_id", "trace_id", "tenant_id", "user_id"],
+      "properties": {
+        "session_id": { "type": "string" },
+        "trace_id": { "type": "string" },
+        "tenant_id": { "type": "string" },
+        "user_id": { "type": "string" }
+      }
+    },
+    "user_ctx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["roles", "data_scope"],
+      "description": "全链路透传,工具侧二次校验(§9.2)。tenant_id/user_id 在 ids 中。",
+      "properties": {
+        "roles": { "type": "array", "items": { "type": "string" } },
+        "permissions": { "type": "array", "items": { "type": "string" } },
+        "data_scope": { "type": "object" }
+      }
+    },
+    "mode": { "type": "string", "enum": ["react", "plan_execute"] },
+    "messages": {
+      "type": "array",
+      "items": { "type": "object" },
+      "description": "压缩后的对话窗口(宽松结构)"
+    },
+    "plan": { "$ref": "#/$defs/plan" },
+    "workspace": { "$ref": "#/$defs/workspace" },
+    "scratchpad": {
+      "type": "array",
+      "items": { "type": "object" },
+      "description": "当前步骤的思考与工具往返(步骤结束即压缩进 workspace)"
+    },
+    "budget": { "$ref": "#/$defs/budget" },
+    "reflection": { "$ref": "#/$defs/reflection" }
+  },
+  "$defs": {
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "steps"],
+      "properties": {
+        "version": { "type": "integer", "minimum": 0, "description": "每次 replan 递增" },
+        "steps": { "type": "array", "items": { "$ref": "#/$defs/step" } }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "goal", "status"],
+      "properties": {
+        "id": { "type": "string" },
+        "goal": { "type": "string" },
+        "capability_hint": { "enum": ["rag", "data", "code", "sop", "base", null] },
+        "depends_on": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["pending", "in_progress", "done", "failed", "skipped"] },
+        "needs_confirmation": { "type": "boolean" }
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "description": "跨步骤共享的中间产物(摘要 + 句柄,红线 8)",
+      "properties": {
+        "items": { "type": "array", "items": { "$ref": "#/$defs/workspaceItem" } }
+      }
+    },
+    "workspaceItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "type", "ref", "summary"],
+      "properties": {
+        "key": { "type": "string" },
+        "type": { "type": "string", "enum": ["sql_result", "code_evidence", "doc_chunks", "sop_run"] },
+        "ref": { "type": "string", "description": "工作区句柄(raw 大对象不进上下文)" },
+        "summary": { "type": "string" }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_steps", "max_cost", "used_steps", "used_cost"],
+      "properties": {
+        "max_steps": { "type": "integer", "minimum": 0 },
+        "max_cost": { "type": "number", "minimum": 0 },
+        "used_steps": { "type": "integer", "minimum": 0 },
+        "used_cost": { "type": "number", "minimum": 0 }
+      }
+    },
+    "reflection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inline_retries", "verdicts"],
+      "properties": {
+        "inline_retries": { "type": "integer", "minimum": 0 },
+        "verdicts": { "type": "array", "items": { "type": "object" } }
+      }
+    }
+  }
+}

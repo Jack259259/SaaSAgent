@@ -1,0 +1,30 @@
+name: ask_codebase
+description: 代码检索分析子 Agent 派发入口;隔离上下文中多步探索,只回传结论 + 代码证据(红线 12)。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [question]
+  properties:
+    question: { type: string }
+    scope: { type: string, description: 可选:限定仓库/路径/语言 }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    answer: { type: string }
+    evidences:
+      type: array
+      items:
+        type: object
+        properties:
+          file: { type: string }
+          line_range: { type: string }
+          snippet: { type: string }
+    confidence: { type: number, minimum: 0, maximum: 1 }
+    followups: { type: array, items: { type: string } }
+permission_scope: code.read.ask
+side_effects: read
+confirmation_required: false
+timeout_ms: 60000
+errors: [NO_PERMISSION, NOT_CONFIGURED, TIMEOUT, VALIDATION_FAILED]
+version: 0.1.0

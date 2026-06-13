@@ -1,0 +1,25 @@
+name: schedule_task
+description: 创建定时订阅任务(定时报表 / 审批催办 / 到期提醒)。以用户身份运行、每任务预算、首次需确认(助手域写)。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [cron, action]
+  properties:
+    cron: { type: string }
+    action: { type: string, description: 触发时提交的会话任务描述 }
+    budget:
+      type: object
+      properties:
+        max_runs: { type: integer, minimum: 1 }
+        max_cost: { type: number, minimum: 0 }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    schedule_id: { type: string }
+permission_scope: base.schedule.create
+side_effects: assistant_write
+confirmation_required: true
+timeout_ms: 10000
+errors: [RATE_LIMITED, VALIDATION_FAILED]
+version: 0.1.0

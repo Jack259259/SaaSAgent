@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:zijin:toolspec",
+  "title": "ToolSpec",
+  "description": "工具契约:能力暴露与调用的唯一接缝(CLAUDE.md §5 / 红线 2)。每个工具一份 YAML 实例,须对此 schema 合法。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "description",
+    "input_schema",
+    "output_schema",
+    "permission_scope",
+    "side_effects",
+    "confirmation_required",
+    "timeout_ms",
+    "errors"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "工具名(snake_case),全局唯一"
+    },
+    "description": { "type": "string", "minLength": 1 },
+    "input_schema": {
+      "$ref": "#/$defs/schemaFragment",
+      "description": "入参 JSON Schema 片段"
+    },
+    "output_schema": {
+      "$ref": "#/$defs/schemaFragment",
+      "description": "出参 JSON Schema 片段"
+    },
+    "permission_scope": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$",
+      "description": "权限点占位串,如 data.read.finance_plan(零信任二次校验依据,红线 3)"
+    },
+    "side_effects": { "$ref": "#/$defs/sideEffect" },
+    "confirmation_required": {
+      "type": "boolean",
+      "description": "业务写(side_effects=write)必为 true(红线 4);编排器强制用户确认"
+    },
+    "timeout_ms": { "type": "integer", "minimum": 1, "maximum": 600000 },
+    "errors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/errorCode" },
+      "uniqueItems": true,
+      "description": "工具可能返回的错误码;运行时错误必须映射到其一(§6)"
+    },
+    "enabled_by_default": {
+      "type": "boolean",
+      "default": true,
+      "description": "默认是否启用;web_search / web_fetch 为 false(红线 13)"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "default": "0.1.0",
+      "description": "工具契约 semver;修改契约须升版(CLAUDE.md §5)"
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "红线 4:对业务系统的写操作必须 confirmation_required=true(orchestrator 强制确认,executor 再验凭据)。",
+      "if": {
+        "properties": { "side_effects": { "const": "write" } },
+        "required": ["side_effects"]
+      },
+      "then": {
+        "properties": { "confirmation_required": { "const": true } },
+        "required": ["confirmation_required"]
+      }
+    }
+  ],
+  "$defs": {
+    "sideEffect": {
+      "type": "string",
+      "enum": ["read", "write", "assistant_write"],
+      "description": "read=只读;write=业务写(仅 sop-executor,红线 4);assistant_write=助手域副作用(确认或订阅制 + 全量审计,不触达业务数据)"
+    },
+    "errorCode": {
+      "type": "string",
+      "enum": [
+        "NO_PERMISSION",
+        "NOT_CONFIGURED",
+        "TIMEOUT",
+        "VALIDATION_FAILED",
+        "AMBIGUOUS_FIELD",
+        "NOT_FOUND",
+        "RATE_LIMITED",
+        "CONFIRMATION_REQUIRED",
+        "SANDBOX_VIOLATION",
+        "UNSUPPORTED",
+        "INTERNAL_ERROR"
+      ],
+      "description": "全局错误码枚举(唯一事实源;audit.json 经 $ref 复用)"
+    },
+    "schemaFragment": {
+      "type": "object",
+      "description": "一个 JSON Schema 片段(对象形态);其自身的合法性由 contract-test 用 Draft2020-12 元校验"
+    }
+  }
+}

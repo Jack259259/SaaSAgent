@@ -1,0 +1,23 @@
+name: query_finance_data
+description: 面向资金计划库的自然语言取数(只读);NL→SQL→校验层(RLS 注入)→只读执行→自纠。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [question]
+  properties:
+    question: { type: string }
+    preferred_format: { type: string, enum: [table, chart] }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    summary: { type: string }
+    table_ref: { type: string }
+    sql: { type: string, description: 最终执行 SQL(透出供核对) }
+    lineage: { type: object }
+permission_scope: data.read.finance_plan
+side_effects: read
+confirmation_required: false
+timeout_ms: 30000
+errors: [AMBIGUOUS_FIELD, NO_PERMISSION, NOT_CONFIGURED, TIMEOUT, VALIDATION_FAILED]
+version: 0.1.0

@@ -1,0 +1,19 @@
+name: cancel_schedule
+description: 取消 / 退订某定时任务(可随时退订;助手域写)。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [schedule_id]
+  properties:
+    schedule_id: { type: string }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    cancelled: { type: boolean }
+permission_scope: base.schedule.cancel
+side_effects: assistant_write
+confirmation_required: false
+timeout_ms: 10000
+errors: [NOT_FOUND, VALIDATION_FAILED]
+version: 0.1.0

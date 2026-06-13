@@ -13,6 +13,8 @@ dev = [
     "pytest-asyncio>=0.26",
     "ruff>=0.11",
     "mypy>=1.15",
+    "types-PyYAML>=6.0",
+    "types-jsonschema>=4.21",
 ]
 
 [tool.ruff]
@@ -27,6 +29,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 [tool.ruff.lint.isort]
 known-first-party = [
     "common",
+    "contracts",
     "agent_gateway",
     "orchestrator",
     "rag_svc",
