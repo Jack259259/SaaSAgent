@@ -5,7 +5,8 @@ description = "自研薄编排循环、Skill 加载、记忆注入、预算控�
 requires-python = ">=3.12"
 dependencies = [
     "common",
-    "fastapi>=0.115",
+    "contracts",
+    "llm",
     "pydantic>=2.7",
     "structlog>=24.1",
 ]
@@ -16,3 +17,5 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 common = { workspace = true }
+contracts = { workspace = true }
+llm = { workspace = true }

@@ -5,9 +5,13 @@ description = "会话管理、SSE 流式、身份签发与透传(CLAUDE.md §3 /
 requires-python = ">=3.12"
 dependencies = [
     "common",
+    "contracts",
+    "llm",
+    "orchestrator",
     "fastapi>=0.115",
     "pydantic>=2.7",
     "structlog>=24.1",
+    "uvicorn>=0.30",
 ]
 
 [build-system]
@@ -16,3 +20,6 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 common = { workspace = true }
+contracts = { workspace = true }
+llm = { workspace = true }
+orchestrator = { workspace = true }

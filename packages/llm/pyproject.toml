@@ -1,0 +1,12 @@
+[project]
+name = "llm"
+version = "0.1.0"
+description = "LLM 网关:Provider 接口 + Anthropic/Mock 实现 + 重试/超时 + prompt-cache 钩子(方案 §11.4)"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.40",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"

@@ -33,9 +33,9 @@ help:
 sync:
 	$(UV) sync --all-packages
 
-dev:
-	@echo "make dev: NOT IMPLEMENTED (see PROGRESS.md)"
-	@exit 2
+# 启动 agent-gateway(阶段 2)。本地依赖(postgres/langfuse,docker compose)后续阶段再接入。
+dev: sync
+	$(UV) run uvicorn agent_gateway.app:app --host 127.0.0.1 --port 8080
 
 # 全部单测;限定单个服务:make test SVC=data-svc(未知服务以退出码 1 失败)。
 test: sync
