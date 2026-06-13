@@ -12,10 +12,10 @@ from fastapi.testclient import TestClient
 
 from agent_gateway import deps
 from agent_gateway.app import app
-from contracts import ToolSpec, UserCtx
+from contracts import ToolSpec
 from contracts.models import ErrorCode, SideEffect
 from llm import MockProvider, ScriptedTurn, ToolUseBlock
-from orchestrator import ToolOutcome, ToolRegistry
+from orchestrator import ToolContext, ToolOutcome, ToolRegistry
 
 
 def _echo_spec() -> ToolSpec:
@@ -32,7 +32,7 @@ def _echo_spec() -> ToolSpec:
     )
 
 
-async def _echo_handler(args: dict[str, Any], user_ctx: UserCtx) -> ToolOutcome:
+async def _echo_handler(args: dict[str, Any], ctx: ToolContext) -> ToolOutcome:
     text = str(args.get("text", ""))
     return ToolOutcome(summary=f"echoed: {text}", raw={"echoed": text})
 

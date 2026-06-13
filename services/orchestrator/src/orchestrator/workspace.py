@@ -59,3 +59,7 @@ class Workspace:
 
     def size(self) -> int:
         return len(self._items)
+
+    def briefs(self) -> list[str]:
+        """工作区条目的"句柄: 摘要"列表(供步骤/收尾提示注入,§4.3)。"""
+        return [f"{ref}: {item.summary}" for ref, item in self._items.items()]

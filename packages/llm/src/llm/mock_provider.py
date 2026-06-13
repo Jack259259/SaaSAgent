@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field
 
 from .types import (
@@ -29,15 +29,32 @@ class ScriptedTurn:
     stop_reason: str = "end_turn"
 
 
-class MockProvider:
-    """按 turn 索引回放剧本;complete 与 stream 共享同一进度。"""
+# 内容路由:按当前消息决定下一轮回复(并发执行下保持确定,阶段 3 Plan&Execute 需要)。
+TurnRouter = Callable[[Sequence[Message]], ScriptedTurn]
 
-    def __init__(self, turns: Sequence[ScriptedTurn], *, chunk_size: int = 8) -> None:
-        self._turns: list[ScriptedTurn] = list(turns)
+
+class MockProvider:
+    """回放预设剧本。两种模式:
+
+    - 索引模式(默认):按 turn 顺序回放,complete 与 stream 共享进度(阶段 2 用法)。
+    - 路由模式:传 router(messages)->ScriptedTurn,按消息内容选回复,并发下确定(阶段 3 用法)。
+    """
+
+    def __init__(
+        self,
+        turns: Sequence[ScriptedTurn] | None = None,
+        *,
+        router: TurnRouter | None = None,
+        chunk_size: int = 8,
+    ) -> None:
+        self._turns: list[ScriptedTurn] = list(turns or [])
+        self._router = router
         self._index = 0
         self._chunk_size = chunk_size
 
-    def _next_turn(self) -> ScriptedTurn:
+    def _pick_turn(self, messages: Sequence[Message]) -> ScriptedTurn:
+        if self._router is not None:
+            return self._router(messages)
         if self._index >= len(self._turns):
             return ScriptedTurn(text="(mock: 剧本已结束)")  # 兜底,避免循环卡死
         turn = self._turns[self._index]
@@ -66,7 +83,7 @@ class MockProvider:
         tools: Sequence[ToolDef] = (),
         max_tokens: int = 4096,
     ) -> LlmResponse:
-        return self._response(self._next_turn())
+        return self._response(self._pick_turn(messages))
 
     async def stream(
         self,
@@ -76,7 +93,7 @@ class MockProvider:
         tools: Sequence[ToolDef] = (),
         max_tokens: int = 4096,
     ) -> AsyncIterator[StreamEvent]:
-        turn = self._next_turn()
+        turn = self._pick_turn(messages)
         for i in range(0, len(turn.text), self._chunk_size):
             yield TextDelta(turn.text[i : i + self._chunk_size])
         for tc in turn.tool_calls:

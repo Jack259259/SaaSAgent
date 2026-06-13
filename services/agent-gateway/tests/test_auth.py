@@ -19,7 +19,7 @@ from orchestrator import ToolRegistry
 @pytest.fixture(autouse=True)
 def _clear_overrides() -> Iterator[None]:
     app.dependency_overrides[deps.get_provider] = lambda: MockProvider([ScriptedTurn(text="x")])
-    app.dependency_overrides[deps.get_registry] = ToolRegistry
+    app.dependency_overrides[deps.get_registry] = lambda: ToolRegistry()
     yield
     app.dependency_overrides.clear()
 

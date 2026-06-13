@@ -68,6 +68,18 @@ class ConfirmRequestEvent:
 
 
 @dataclass(frozen=True)
+class AskUserEvent:
+    """结构化澄清(≤3 问);回执经 /chat/confirm 的 answers 字段返回。"""
+
+    id: str
+    questions: list[dict[str, Any]]
+    SSE_TYPE: ClassVar[str] = "ask_user"
+
+    def data(self) -> dict[str, Any]:
+        return {"id": self.id, "questions": self.questions}
+
+
+@dataclass(frozen=True)
 class AnswerDeltaEvent:
     text: str
     SSE_TYPE: ClassVar[str] = "answer_delta"
@@ -102,6 +114,7 @@ OrchestratorEvent = (
     | ToolCallEvent
     | ToolResultSummaryEvent
     | ConfirmRequestEvent
+    | AskUserEvent
     | AnswerDeltaEvent
     | DoneEvent
     | ErrorEvent

@@ -13,9 +13,11 @@ from contracts.models import ErrorCode, ResultStatus, SideEffect
 from orchestrator import (
     DefaultPermissionChecker,
     NoPermissionError,
+    ToolContext,
     ToolNotFoundError,
     ToolOutcome,
     ToolRegistry,
+    Workspace,
     anonymous_who,
     assert_user_ctx,
     emit_audit,
@@ -46,7 +48,11 @@ def _user_ctx(perms: Sequence[str] = ("*",)) -> UserCtx:
     )
 
 
-async def _echo_handler(args: dict[str, Any], user_ctx: UserCtx) -> ToolOutcome:
+def _ctx(user_ctx: UserCtx) -> ToolContext:
+    return ToolContext(user_ctx=user_ctx, workspace=Workspace(), trace_id="t-test")
+
+
+async def _echo_handler(args: dict[str, Any], ctx: ToolContext) -> ToolOutcome:
     text = str(args.get("text", ""))
     return ToolOutcome(summary=f"echoed: {text}", raw={"echoed": text})
 
@@ -68,7 +74,7 @@ def test_default_checker_wildcard_and_scope() -> None:
 async def test_registry_invoke_ok() -> None:
     reg = ToolRegistry()
     reg.register(_echo_spec(), _echo_handler)
-    out = await reg.invoke("echo_tool", {"text": "hi"}, _user_ctx())
+    out = await reg.invoke("echo_tool", {"text": "hi"}, _ctx(_user_ctx()))
     assert out.summary == "echoed: hi"
 
 
@@ -76,13 +82,13 @@ async def test_registry_invoke_denied() -> None:
     reg = ToolRegistry()
     reg.register(_echo_spec(), _echo_handler)
     with pytest.raises(NoPermissionError):
-        await reg.invoke("echo_tool", {"text": "x"}, _user_ctx(perms=[]))
+        await reg.invoke("echo_tool", {"text": "x"}, _ctx(_user_ctx(perms=[])))
 
 
 async def test_registry_unknown_tool() -> None:
     reg = ToolRegistry()
     with pytest.raises(ToolNotFoundError):
-        await reg.invoke("nope", {}, _user_ctx())
+        await reg.invoke("nope", {}, _ctx(_user_ctx()))
 
 
 def test_emit_audit_denied_logged() -> None:

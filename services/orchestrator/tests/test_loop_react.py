@@ -17,6 +17,7 @@ from orchestrator import (
     Orchestrator,
     StepEvent,
     ToolCallEvent,
+    ToolContext,
     ToolOutcome,
     ToolRegistry,
     ToolResultSummaryEvent,
@@ -43,12 +44,12 @@ def _user_ctx(perms: Sequence[str] = ("*",)) -> UserCtx:
     )
 
 
-async def _echo_handler(args: dict[str, Any], user_ctx: UserCtx) -> ToolOutcome:
+async def _echo_handler(args: dict[str, Any], ctx: ToolContext) -> ToolOutcome:
     text = str(args.get("text", ""))
     return ToolOutcome(summary=f"echoed: {text}", raw={"echoed": text})
 
 
-async def _fail_handler(args: dict[str, Any], user_ctx: UserCtx) -> ToolOutcome:
+async def _fail_handler(args: dict[str, Any], ctx: ToolContext) -> ToolOutcome:
     raise RuntimeError("boom")
 
 

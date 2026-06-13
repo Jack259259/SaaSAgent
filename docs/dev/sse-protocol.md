@@ -24,10 +24,19 @@ data: <single-line JSON>
 | `step` | `index:int`, `note:str` | 一轮含工具调用前的推理摘要(截断 ≤200 字) |
 | `tool_call` | `id:str`, `tool:str`, `arguments:object` | 工具调用发起(按顺序) |
 | `tool_result_summary` | `id:str`, `tool:str`, `summary:str`, `workspace_ref:str` | 工具完成:**仅摘要 + 句柄**(红线 8),raw 落工作区,按句柄分页读取 |
-| `confirm_request` | `id:str`, `prompt:str`, `options:[str]` | 写操作确认暂停(阶段 3 实现;回执端点 `POST /chat/confirm`) |
+| `confirm_request` | `id:str`, `prompt:str`, `options:[str]` | 写操作确认暂停(红线 4);本段流随后结束,回执见下 |
+| `ask_user` | `id:str`, `questions:[{question, options}]` | 结构化澄清(≤3 问);本段流随后结束,回执见下 |
 | `answer_delta` | `text:str` | 最终回答分段 |
-| `done` | `stop_reason:str`, `used_steps:int` | 结束。`stop_reason ∈ {end_turn, budget_exhausted, no_progress}` |
+| `done` | `stop_reason:str`, `used_steps:int` | 结束。`stop_reason ∈ {end_turn, completed, budget_exhausted, no_progress}` |
 | `error` | `code:str`, `message:str` | 错误(message 不暴露内部实现 / SQL,§6) |
+
+## 暂停与恢复(Plan&Execute,阶段 3)
+
+- `/chat` 与 `/chat/confirm` 的响应头均带 **`X-Session-Id`**;前端用它发回执。
+- 遇 `confirm_request`(写步骤)或 `ask_user` 时,**本段 SSE 流结束**(不发 `done`),会话状态在服务端保存。
+- 恢复:`POST /chat/confirm`,body `{"session_id": "...", "confirmation": {"confirmed": true}?, "answers": {...}?}`
+  → 返回**续传的 SSE 段**,直至下一次暂停或 `done`。confirm 用 `confirmation`,ask_user 用 `answers`。
+- 会话按 tenant/user 隔离:`/chat/confirm` 的 `X-User-Ctx` 与会话归属不符 → **403**;会话不存在 → **404**(红线 3/9)。
 
 ## 鉴权失败(非 SSE)
 

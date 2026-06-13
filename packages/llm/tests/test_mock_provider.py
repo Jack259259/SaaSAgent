@@ -3,12 +3,25 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 
 import pytest
 
-from llm import MockProvider, ScriptedTurn, ToolUseBlock
+from llm import Message, MockProvider, Role, ScriptedTurn, TextBlock, ToolUseBlock
 from llm.retry import RetryConfig, with_retry
 from llm.types import StreamDone, TextDelta, ToolCallStarted
+
+
+async def test_router_mode_picks_by_content() -> None:
+    def router(messages: Sequence[Message]) -> ScriptedTurn:
+        last = " ".join(b.text for b in messages[-1].content if isinstance(b, TextBlock))
+        return ScriptedTurn(text="A" if "alpha" in last else "B", stop_reason="end_turn")
+
+    p = MockProvider(router=router)
+    a = await p.complete(system="s", messages=[Message(Role.user, [TextBlock("alpha")])])
+    b = await p.complete(system="s", messages=[Message(Role.user, [TextBlock("beta")])])
+    assert a.text == "A"
+    assert b.text == "B"  # 路由按内容,且不随调用次数漂移(并发确定)
 
 
 async def test_complete_replays_turns() -> None:

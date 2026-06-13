@@ -6,12 +6,13 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from contracts import ToolSpec, UserCtx
+from contracts import ToolSpec
 from contracts.loader import load_toolspecs
 from contracts.models import ErrorCode
 from llm import ToolDef
 
 from .permissions import DefaultPermissionChecker, PermissionChecker
+from .tool_context import ToolContext
 
 
 class ToolNotFoundError(Exception):
@@ -29,7 +30,7 @@ class ToolOutcome:
     is_error: bool = False
 
 
-ToolHandler = Callable[[dict[str, Any], UserCtx], Awaitable[ToolOutcome]]
+ToolHandler = Callable[[dict[str, Any], ToolContext], Awaitable[ToolOutcome]]
 
 
 @dataclass
@@ -75,9 +76,10 @@ class ToolRegistry:
             for e in self._entries.values()
         ]
 
-    async def invoke(self, name: str, arguments: dict[str, Any], user_ctx: UserCtx) -> ToolOutcome:
+    async def invoke(self, name: str, arguments: dict[str, Any], ctx: ToolContext) -> ToolOutcome:
         entry = self._entries.get(name)
         if entry is None:
             raise ToolNotFoundError(name)
-        self._checker.check(user_ctx, entry.spec)  # 红线 3:二次校验,不通过抛 NoPermissionError
-        return await entry.handler(arguments, user_ctx)
+        # 红线 3:调用前二次校验 user_ctx 与 permission_scope,不通过抛 NoPermissionError。
+        self._checker.check(ctx.user_ctx, entry.spec)
+        return await entry.handler(arguments, ctx)
