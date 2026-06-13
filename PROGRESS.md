@@ -9,7 +9,7 @@
 - [x] 阶段 1:契约层(框架无关的接缝)(2026-06-13)—— DoD:`make lint && make test && make contract-test` 全绿(contract-test 真实现:21 份工具规格 + 信封 user_ctx 负例 + schema 正反例 + 模型↔schema 一致性 + docs 不漂移);commit `feat(contracts)`。
 - [x] 阶段 2:LLM 网关 + 编排器薄循环 + SSE 网关(2026-06-13)—— DoD:`make lint && make test` 全绿(含 e2e:SSE 事件序列 tool_call/tool_result_summary/answer_delta/done、无 user_ctx 拒绝 401 + 审计);commit `feat(orchestrator)`。
 - [x] 阶段 3:Plan&Execute + 行内反思 + 基础工具第一批(7 件)(2026-06-13)—— DoD:`make lint && make test` 全绿(计划→并行→失败→replan→完成、写步骤 confirm 暂停/恢复、ask_user 往返、反思重试≤2、5 件 base 工具、跨租户会话拒绝);commit `feat(orchestrator)`。
-- [ ] 阶段 4:sandbox-svc(run_analysis 受限沙箱)—— DoD:`make lint && make test` 全绿且红线 11 负例全过(断网/越界读/超时/超内存/import 白名单);commit `feat(sandbox)`。
+- [x] 阶段 4:sandbox-svc(run_analysis 受限沙箱)(2026-06-13)—— DoD:`make lint && make test` 全绿且红线 11 负例全过(断网/越界读/超时/import 白名单跨平台;超内存 POSIX/CI;正例 CSV→PNG;run_analysis 越权被拒);commit `feat(sandbox)`。
 - [ ] 阶段 5:rag-svc(LightRAG 双库 + ACL 前置过滤)—— DoD:`make lint && make test` 全绿(ACL 负例、引用完整、空目录摄取幂等);commit `feat(rag)`。
 - [ ] 阶段 6:data-svc(WrenAI 适配 + SQL 校验层)—— DoD:`make lint && make test` 全绿(DML 拒绝/表白名单/RLS 注入含子查询/自纠路径/LIMIT 包装);commit `feat(data)`。
 - [ ] 阶段 7:code-svc(索引管线 + 符号图 + 代码子 Agent)—— DoD:`make lint && make test` 全绿(sample_repo 问答带 evidences、预算超限部分结论);commit `feat(code)`。
