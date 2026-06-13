@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+env:
+  # 锁文件漂移视为失败(等价于 uv sync --locked)
+  UV_LOCKED: "1"
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: lint
+        run: make lint
+
+      - name: test
+        run: make test
+
+      # contract-test 在阶段 1 才真实现(见 PROGRESS.md),此前是打印
+      # "NOT IMPLEMENTED (see PROGRESS.md)" 的桩。GNU make 对任何配方失败一律以
+      # 退出码 2 结束,无法用退出码区分"桩"与"真实失败",故按输出标记容忍;
+      # 阶段 1 落地真实现后,此容忍分支自动失效(真实现不会打印该标记)。
+      - name: contract-test
+        run: |
+          set +e
+          out="$(make contract-test 2>&1)"
+          code=$?
+          printf '%s\n' "$out"
+          if [ "$code" -eq 0 ]; then exit 0; fi
+          if printf '%s\n' "$out" | grep -q "NOT IMPLEMENTED"; then
+            echo "contract-test 为阶段桩,容忍通过(阶段 1 真实现后自动失效)"
+            exit 0
+          fi
+          exit "$code"

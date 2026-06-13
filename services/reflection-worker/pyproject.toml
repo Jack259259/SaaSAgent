@@ -1,0 +1,18 @@
+[project]
+name = "reflection-worker"
+version = "0.1.0"
+description = "事后反思队列消费、经验入库、改进工单(CLAUDE.md §3 / 方案 §11.1)"
+requires-python = ">=3.12"
+dependencies = [
+    "common",
+    "fastapi>=0.115",
+    "pydantic>=2.7",
+    "structlog>=24.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+common = { workspace = true }

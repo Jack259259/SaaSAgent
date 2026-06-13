@@ -1,0 +1,18 @@
+[project]
+name = "code-svc"
+version = "0.1.0"
+description = "代码子 Agent 运行时 + Zoekt/符号图查询接口(CLAUDE.md §3 / 方案 §11.1)"
+requires-python = ">=3.12"
+dependencies = [
+    "common",
+    "fastapi>=0.115",
+    "pydantic>=2.7",
+    "structlog>=24.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+common = { workspace = true }

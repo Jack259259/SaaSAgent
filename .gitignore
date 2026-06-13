@@ -1,0 +1,27 @@
+# ---- Python / 工具缓存 ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# ---- 环境与密钥(CLAUDE.md §6:.env 不入库)----
+.env
+.env.*
+!.env.example
+
+# ---- IDE / 本地配置 ----
+.idea/
+.vscode/
+.claude/settings.local.json
+
+# ---- data/ 人工上传区:除 README 外一切不入库(CLAUDE.md 阶段 0 约定)----
+data/**
+!data/**/
+!data/**/README.md

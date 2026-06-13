@@ -1,0 +1,52 @@
+[project]
+name = "zijin-plan-agent"
+version = "0.1.0"
+description = "资金计划 SaaS 智能助手 Agent —— monorepo 工作区根(虚拟包,不安装自身)"
+requires-python = ">=3.12"
+
+[tool.uv.workspace]
+members = ["packages/*", "services/*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.26",
+    "ruff>=0.11",
+    "mypy>=1.15",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+# 仓库注释/文档大量使用中文全角标点,关闭"易混淆 Unicode 字符"系列误报
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "common",
+    "agent_gateway",
+    "orchestrator",
+    "rag_svc",
+    "data_svc",
+    "code_svc",
+    "sop_executor",
+    "memory_svc",
+    "reflection_worker",
+    "sandbox_svc",
+    "scheduler_svc",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+pretty = true
+warn_unreachable = true
+
+[tool.pytest.ini_options]
+testpaths = ["packages", "services"]
+addopts = "-q --import-mode=importlib"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
