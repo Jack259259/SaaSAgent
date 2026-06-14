@@ -1,13 +1,12 @@
 [project]
 name = "memory-svc"
 version = "0.1.0"
-description = "分层记忆读写、抽取作业(CLAUDE.md §3 / 方案 §11.1)"
+description = "分层记忆:画像/情景/经验存取 + 脱敏 + 重要性门槛 + 租户隔离(方案 §7)"
 requires-python = ">=3.12"
 dependencies = [
-    "common",
-    "fastapi>=0.115",
+    "contracts",
+    "llm",
     "pydantic>=2.7",
-    "structlog>=24.1",
 ]
 
 [build-system]
@@ -15,4 +14,5 @@ requires = ["uv_build>=0.11,<0.12"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-common = { workspace = true }
+contracts = { workspace = true }
+llm = { workspace = true }

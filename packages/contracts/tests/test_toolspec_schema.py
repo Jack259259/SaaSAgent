@@ -10,11 +10,12 @@ from contracts.models import SideEffect
 from contracts.validator import ContractValidationError, validate_toolspec
 
 
-def test_all_21_toolspecs_load_and_valid() -> None:
+def test_all_toolspecs_load_and_valid() -> None:
     specs = load_toolspecs()
-    assert len(specs) == 21, "应为 5 领域 + 16 基础 = 21 份"
+    # 5 领域 + 18 基础(阶段 9a 新增 search_memory / load_skill)。
+    assert len(specs) == 23, "应为 5 领域 + 18 基础 = 23 份"
     names = [ls.spec.name for ls in specs]
-    assert len(set(names)) == 21, "工具名必须全局唯一"
+    assert len(set(names)) == 23, "工具名必须全局唯一"
 
 
 def test_io_schemas_are_themselves_valid_jsonschema() -> None:

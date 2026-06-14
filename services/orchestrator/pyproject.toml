@@ -9,6 +9,7 @@ dependencies = [
     "contracts",
     "data-svc",
     "llm",
+    "memory-svc",
     "rag-svc",
     "sandbox-svc",
     "sop-executor",
@@ -27,6 +28,7 @@ common = { workspace = true }
 contracts = { workspace = true }
 data-svc = { workspace = true }
 llm = { workspace = true }
+memory-svc = { workspace = true }
 rag-svc = { workspace = true }
 sandbox-svc = { workspace = true }
 sop-executor = { workspace = true }

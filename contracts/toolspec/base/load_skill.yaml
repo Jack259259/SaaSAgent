@@ -1,0 +1,20 @@
+name: load_skill
+description: 按名加载某 Skill 全文(渐进式披露:系统提示只注入索引,需要时再加载,§6.2)。只读。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [name]
+  properties:
+    name: { type: string }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    name: { type: string }
+    content: { type: string }
+permission_scope: base.skill.load
+side_effects: read
+confirmation_required: false
+timeout_ms: 10000
+errors: [NOT_FOUND, VALIDATION_FAILED]
+version: 0.1.0

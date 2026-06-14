@@ -1,0 +1,30 @@
+name: search_memory
+description: 检索本人记忆(情景 / 经验,向量 + 标签;只读)。按 tenant_id + user_id 隔离(红线 9)。
+input_schema:
+  type: object
+  additionalProperties: false
+  required: [query]
+  properties:
+    query: { type: string }
+    kinds:
+      type: array
+      items: { type: string, enum: [episodic, experience] }
+    top_k: { type: integer, minimum: 1, maximum: 20 }
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    results:
+      type: array
+      items:
+        type: object
+        properties:
+          kind: { type: string }
+          content: { type: string }
+          score: { type: number }
+permission_scope: base.memory.search
+side_effects: read
+confirmation_required: false
+timeout_ms: 10000
+errors: [VALIDATION_FAILED]
+version: 0.1.0

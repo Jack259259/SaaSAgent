@@ -16,12 +16,14 @@
 | `export_file` | base | read | false | true |
 | `get_page_context` | base | read | false | true |
 | `list_schedules` | base | read | false | true |
+| `load_skill` | base | read | false | true |
 | `notify` | base | assistant_write | false | true |
 | `parse_user_file` | base | read | false | true |
 | `read_workspace` | base | read | false | true |
 | `run_analysis` | base | read | false | true |
 | `save_memory` | base | assistant_write | false | true |
 | `schedule_task` | base | assistant_write | true | true |
+| `search_memory` | base | read | false | true |
 | `update_plan` | base | read | false | true |
 | `web_fetch` | base | read | false | false |
 | `web_search` | base | read | false | false |

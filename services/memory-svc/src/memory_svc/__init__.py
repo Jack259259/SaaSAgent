@@ -1,6 +1,35 @@
-"""memory-svc 服务:分层记忆读写、抽取作业(CLAUDE.md §3 / 方案 §11.1)。
+"""memory-svc:分层记忆(画像/情景/经验)存取 + 脱敏 + 重要性门槛 + 租户隔离(方案 §7)。
 
-阶段 0 为独立 Python 包骨架(src 布局),具体能力实现见对应阶段。
+对外能力经 save_memory / search_memory 契约;经验仅 reflection-worker 可录(9b)。
 """
 
+from __future__ import annotations
+
+from .models import (
+    ExperienceEntry,
+    MemoryHit,
+    MemoryKind,
+    OpeningContext,
+    SaveResult,
+    StoredMemory,
+)
+from .redaction import BasicRedactor, Redactor
+from .service import MemoryService
+from .store import InMemoryMemoryStore, MemoryStore
+
 __version__ = "0.1.0"
+
+__all__ = [
+    "BasicRedactor",
+    "ExperienceEntry",
+    "InMemoryMemoryStore",
+    "MemoryHit",
+    "MemoryKind",
+    "MemoryService",
+    "MemoryStore",
+    "OpeningContext",
+    "Redactor",
+    "SaveResult",
+    "StoredMemory",
+    "__version__",
+]

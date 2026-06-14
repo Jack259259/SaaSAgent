@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from contracts import UserCtx
 from llm import Provider
+from memory_svc import MemoryService
 from orchestrator import (
     Orchestrator,
     Session,
@@ -24,9 +25,17 @@ from orchestrator import (
     SessionStore,
     ToolRegistry,
 )
+from orchestrator.injection import opening_system_prompt
+from orchestrator.skills import SkillIndex
 
 from .auth import get_trace_id, require_user_ctx
-from .deps import get_provider, get_registry, get_session_store
+from .deps import (
+    get_memory_service,
+    get_provider,
+    get_registry,
+    get_session_store,
+    get_skill_index,
+)
 from .sse import encode_sse
 
 app = FastAPI(title="资金计划 Agent 网关", version="0.1.0")
@@ -62,9 +71,17 @@ async def chat(
     provider: Annotated[Provider, Depends(get_provider)],
     registry: Annotated[ToolRegistry, Depends(get_registry)],
     store: Annotated[SessionStore, Depends(get_session_store)],
+    memory_service: Annotated[MemoryService, Depends(get_memory_service)],
+    skill_index: Annotated[SkillIndex, Depends(get_skill_index)],
 ) -> StreamingResponse:
     session = store.create(user_ctx=user_ctx, trace_id=trace_id, page_context=body.page_context)
-    orchestrator = Orchestrator(provider=provider, registry=registry)
+    # 开场注入:画像 + 相关记忆/经验 TopK + Skill 索引(各设 token 上限,§4.3/§6.2/§7.2)。
+    injected = await opening_system_prompt(
+        user_ctx, memory_service, skill_index, query=body.message
+    )
+    orchestrator = Orchestrator(
+        provider=provider, registry=registry, system_prompt=lambda: injected
+    )
     orchestrator.seed_user_message(session, body.message)
 
     async def event_stream() -> AsyncIterator[str]:
@@ -81,6 +98,8 @@ async def chat_confirm(
     provider: Annotated[Provider, Depends(get_provider)],
     registry: Annotated[ToolRegistry, Depends(get_registry)],
     store: Annotated[SessionStore, Depends(get_session_store)],
+    memory_service: Annotated[MemoryService, Depends(get_memory_service)],
+    skill_index: Annotated[SkillIndex, Depends(get_skill_index)],
 ) -> StreamingResponse:
     try:
         session = store.get(body.session_id, user_ctx)  # 红线 3/9:校验会话归属
@@ -89,7 +108,10 @@ async def chat_confirm(
     except SessionAccessError as exc:
         raise HTTPException(status_code=403, detail="session does not belong to caller") from exc
 
-    orchestrator = Orchestrator(provider=provider, registry=registry)
+    injected = await opening_system_prompt(user_ctx, memory_service, skill_index)
+    orchestrator = Orchestrator(
+        provider=provider, registry=registry, system_prompt=lambda: injected
+    )
 
     async def event_stream() -> AsyncIterator[str]:
         async for event in orchestrator.resume(

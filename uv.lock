@@ -42,6 +42,7 @@ dependencies = [
     { name = "data-svc" },
     { name = "fastapi" },
     { name = "llm" },
+    { name = "memory-svc" },
     { name = "orchestrator" },
     { name = "pydantic" },
     { name = "rag-svc" },
@@ -58,6 +59,7 @@ requires-dist = [
     { name = "data-svc", editable = "services/data-svc" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "llm", editable = "packages/llm" },
+    { name = "memory-svc", editable = "services/memory-svc" },
     { name = "orchestrator", editable = "services/orchestrator" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "rag-svc", editable = "services/rag-svc" },
@@ -904,18 +906,16 @@ name = "memory-svc"
 version = "0.1.0"
 source = { editable = "services/memory-svc" }
 dependencies = [
-    { name = "common" },
-    { name = "fastapi" },
+    { name = "contracts" },
+    { name = "llm" },
     { name = "pydantic" },
-    { name = "structlog" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "common", editable = "packages/common" },
-    { name = "fastapi", specifier = ">=0.115" },
+    { name = "contracts", editable = "packages/contracts" },
+    { name = "llm", editable = "packages/llm" },
     { name = "pydantic", specifier = ">=2.7" },
-    { name = "structlog", specifier = ">=24.1" },
 ]
 
 [[package]]
@@ -1054,6 +1054,7 @@ dependencies = [
     { name = "contracts" },
     { name = "data-svc" },
     { name = "llm" },
+    { name = "memory-svc" },
     { name = "openpyxl" },
     { name = "pydantic" },
     { name = "rag-svc" },
@@ -1069,6 +1070,7 @@ requires-dist = [
     { name = "contracts", editable = "packages/contracts" },
     { name = "data-svc", editable = "services/data-svc" },
     { name = "llm", editable = "packages/llm" },
+    { name = "memory-svc", editable = "services/memory-svc" },
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "rag-svc", editable = "services/rag-svc" },
