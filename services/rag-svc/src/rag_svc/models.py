@@ -19,6 +19,7 @@ class Chunk(BaseModel):
     location: str
     text: str
     acl_tags: list[str] = Field(default_factory=list)
+    tenant_id: str | None = None  # 租户私有内容归属;None=全局知识(对所有租户可见,红线 9)
     version: str = "0"
     effective_date: str | None = None
     embedding: list[float] = Field(default_factory=list)

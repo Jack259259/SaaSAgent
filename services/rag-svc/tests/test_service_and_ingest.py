@@ -12,8 +12,8 @@ from rag_svc.ingest import ingest_dir
 _FIXTURES = Path(__file__).parent / "fixtures" / "knowledge"
 
 
-def _uc(roles: Sequence[str]) -> UserCtx:
-    return UserCtx(tenant_id="t", user_id="u", roles=list(roles), data_scope={})
+def _uc(roles: Sequence[str], tenant: str = "t") -> UserCtx:
+    return UserCtx(tenant_id=tenant, user_id="u", roles=list(roles), data_scope={})
 
 
 async def test_business_acl_prefilter(tmp_path: Path) -> None:
@@ -43,6 +43,34 @@ async def test_it_design_kb_internal_only(tmp_path: Path) -> None:
 
     internal = await svc.search_knowledge(_uc(["internal_dev"]), "执行率", kb=acl.KB_IT_DESIGN)
     assert len(internal.chunks) > 0
+
+
+async def test_tenant_private_not_cross_visible(tmp_path: Path) -> None:
+    # 一篇"租户私有"业务文档(acl_tags=tenant),以 t_acme 摄取;t_other 绝不可见(红线 9)。
+    src = tmp_path / "acme_docs"
+    src.mkdir()
+    (src / "private.md").write_text(
+        "---\n"
+        "source: 客户ACME/专属口径\n"
+        "acl_tags: [tenant]\n"
+        "---\n"
+        "资金计划执行率的 ACME 专属口径说明。\n",
+        encoding="utf-8",
+    )
+    store_dir = tmp_path / "store"
+    await ingest_dir(kb=acl.KB_BUSINESS, src=src, store_dir=store_dir, tenant="t_acme")
+    svc = RagService.from_dir(store_dir)
+
+    acme = await svc.search_knowledge(
+        _uc(["tenant_user"], tenant="t_acme"), "执行率口径", kb=acl.KB_BUSINESS, top_k=10
+    )
+    assert any("ACME" in c.source for c in acme.citations)  # 本租户可见
+
+    other = await svc.search_knowledge(
+        _uc(["tenant_user"], tenant="t_other"), "执行率口径", kb=acl.KB_BUSINESS, top_k=10
+    )
+    assert other.chunks == []  # 跨租户绝不互见(红线 9)
+    assert other.summary == "未在知识库中找到依据。"
 
 
 async def test_citations_complete(tmp_path: Path) -> None:

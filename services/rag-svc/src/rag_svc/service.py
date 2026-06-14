@@ -33,7 +33,8 @@ class RagService:
         target_kbs = [kb] if kb is not None else list(self._stores)
 
         def visible(chunk: Chunk) -> bool:
-            return acl.chunk_visible(user_ctx, chunk.acl_tags)
+            # 红线 5+9:租户维度 ∧ 标签维度,均在检索前候选阶段施加。
+            return acl.chunk_allowed(user_ctx, tenant_id=chunk.tenant_id, acl_tags=chunk.acl_tags)
 
         results: list[RetrievedChunk] = []
         for target in target_kbs:

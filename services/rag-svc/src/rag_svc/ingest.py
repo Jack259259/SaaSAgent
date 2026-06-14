@@ -26,7 +26,9 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-async def ingest_dir(*, kb: str, src: Path, store_dir: Path) -> dict[str, int]:
+async def ingest_dir(
+    *, kb: str, src: Path, store_dir: Path, tenant: str | None = None
+) -> dict[str, int]:
     index_path = store_dir / kb / "index.json"
     store = LocalKnowledgeStore.load(index_path, embedder=HashingEmbedder())
 
@@ -50,6 +52,8 @@ async def ingest_dir(*, kb: str, src: Path, store_dir: Path) -> dict[str, int]:
         source = str(meta.get("source") or rel)
         version = str(meta.get("version", "0"))
         effective_date = meta.get("effective_date")
+        raw_tenant = meta.get("tenant_id")  # front-matter 覆盖 CLI --tenant;均缺省则全局(None)
+        chunk_tenant = str(raw_tenant) if raw_tenant else tenant
         doc_id = f"{kb}:{rel}"
 
         chunks = [
@@ -61,6 +65,7 @@ async def ingest_dir(*, kb: str, src: Path, store_dir: Path) -> dict[str, int]:
                 location=location,
                 text=text,
                 acl_tags=acl_tags,
+                tenant_id=chunk_tenant,
                 version=version,
                 effective_date=effective_date if isinstance(effective_date, str) else None,
             )
@@ -81,8 +86,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--kb", required=True, choices=[acl.KB_BUSINESS, acl.KB_IT_DESIGN])
     parser.add_argument("--src", required=True, help="源目录(如 data/knowledge/business)")
     parser.add_argument("--store-dir", default=_DEFAULT_STORE_DIR, help="索引存储根目录")
+    parser.add_argument(
+        "--tenant", default=None, help="租户私有语料归属 ID(缺省=全局知识,对所有租户可见)"
+    )
     args = parser.parse_args(argv)
-    stats = asyncio.run(ingest_dir(kb=args.kb, src=Path(args.src), store_dir=Path(args.store_dir)))
+    stats = asyncio.run(
+        ingest_dir(
+            kb=args.kb, src=Path(args.src), store_dir=Path(args.store_dir), tenant=args.tenant
+        )
+    )
     print(f"ingest kb={args.kb} src={args.src}: {stats}")
     return 0
 

@@ -16,12 +16,13 @@ source: 业务手册/执行率口径        # 来源(展示在引用里)
 version: "1.0"                   # 版本
 effective_date: "2026-01-01"     # 生效日期(YYYY-MM-DD)
 acl_tags: [public]               # ACL 标签(见下)
+tenant_id: t_acme                # 可选:租户私有归属;缺省=全局知识(见下"租户维度")
 ---
 正文……
 ```
 
 支持的子集:`key: 标量` 与 `key: [a, b]`(引号可选)。无 front-matter 时:source=相对路径、
-acl_tags 取库默认(business→`public`,it_design→`internal`)。
+acl_tags 取库默认(business→`public`,it_design→`internal`)、tenant_id 缺省为全局(None)。
 
 ## acl_tags 取值约定(红线 5)
 
@@ -34,13 +35,22 @@ acl_tags 取库默认(business→`public`,it_design→`internal`)。
 - **KB 级**:`it_design` 库**仅内部角色**可查(§9.1),无权角色根本不查该库(§9.3 物理隔离)。
 - **tag 级**:角色授予标签集 ∩ chunk.acl_tags ≠ ∅ 才可见;过滤发生在**检索前**(LocalKnowledgeStore 候选阶段),绝不生成后兜底。
 
+### 租户维度(红线 9,跨租户绝不互见)
+
+- **缺省全局**:不写 `tenant_id` → 该片段为全局知识,对所有租户可见(适合 SaaS 产品/领域通用文档)。
+- **租户私有**:写 `tenant_id: <租户ID>`(或摄取时 `--tenant <租户ID>`)→ 该片段**仅本租户**可检索到,
+  其他租户即便角色标签匹配也**根本不进候选**(与标签同为检索前过滤)。front-matter 的 `tenant_id` 覆盖 CLI 的 `--tenant`。
+- **铁律**:租户私有/敏感的"业务数据本身"应走 data-svc(库内 RLS),**不要**塞进知识库;知识库放的是文档化知识。
+
 ## 上传后执行的命令
 
 ```bash
-# 业务库
+# 业务库(全局知识)
 uv run ingest --kb business   --src data/knowledge/business
 # IT 设计库
 uv run ingest --kb it_design  --src data/knowledge/it-design
+# 某租户私有业务文档(整目录归该租户;片段仅该租户可见)
+uv run ingest --kb business   --src data/knowledge/tenants/t_acme --tenant t_acme
 ```
 
 - **空目录**:无文件 → 幂等空跑(退出 0),这是人工上传前的常态。
