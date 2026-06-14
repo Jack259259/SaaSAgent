@@ -21,6 +21,10 @@ from .steprunner import FakeUiRunner, UiStepRunner
 from .templating import resolve
 
 
+class RunAccessError(Exception):
+    """续行时 run 归属校验未通过(跨租户 / 跨用户)。红线 3/9 零信任。"""
+
+
 class SopExecutor:
     def __init__(
         self,
@@ -68,6 +72,9 @@ class SopExecutor:
     async def resume(
         self, state: RunState, sop: Sop, *, confirmed: bool, user_ctx: UserCtx
     ) -> RunState:
+        # 零信任:复验 run 归属(红线 3/9),不依赖上游会话校验。
+        if state.tenant_id != user_ctx.tenant_id or state.user_id != user_ctx.user_id:
+            raise RunAccessError(f"run {state.run_id} 不属于当前用户")
         # 双闸:执行器复验确认凭据(红线 4 第二闸)。
         if not confirmed:
             return self._fail(state, sop, "用户取消确认")

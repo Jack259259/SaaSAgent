@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from .executor import SopExecutor
+from .executor import RunAccessError, SopExecutor
 from .httpcaller import HttpCaller
 from .models import (
     Confirmation,
@@ -28,6 +28,7 @@ __all__ = [
     "HttpCaller",
     "InMemoryRunStore",
     "PlaywrightUiRunner",
+    "RunAccessError",
     "RunReport",
     "RunState",
     "RunStatus",

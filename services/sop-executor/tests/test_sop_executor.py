@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 
 from contracts import UserCtx
-from sop_executor import FakeUiRunner, HttpCaller, RunStatus, Sop, SopExecutor
+from sop_executor import (
+    FakeUiRunner,
+    HttpCaller,
+    RunAccessError,
+    RunStatus,
+    Sop,
+    SopExecutor,
+)
 from sop_executor.demo_mock import DemoMockApp
 
 
@@ -72,3 +80,16 @@ async def test_api_step_failure_uses_on_failure_hint(demo_sop: Sop) -> None:
         final.failure_hint == "同名条目已存在,请换个名称后重试"
     )  # 命中 on_failure when=status=409
     assert not any(s.kind == "postcondition" for s in final.steps)  # 不跳步:失败即停,未做回查
+
+
+async def test_resume_cross_tenant_rejected(demo_sop: Sop) -> None:
+    # 零信任:他租户/他用户不得 resume 别人的 run(红线 3/9)。
+    ex = _executor(DemoMockApp())
+    owner = _uc(["*"])  # tenant_id=t1, user_id=u1
+    state = await ex.submit(demo_sop, {"name": "x", "amount": 10}, owner)
+    assert state.status == RunStatus.paused
+    intruder = UserCtx(
+        tenant_id="t2", user_id="evil", roles=["internal"], data_scope={}, permissions=["*"]
+    )
+    with pytest.raises(RunAccessError):
+        await ex.resume(state, demo_sop, confirmed=True, user_ctx=intruder)

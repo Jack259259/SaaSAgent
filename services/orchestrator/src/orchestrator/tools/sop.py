@@ -10,7 +10,7 @@ from typing import Any
 
 import structlog
 
-from sop_executor import RunState, RunStatus, SopService
+from sop_executor import RunAccessError, RunState, RunStatus, SopService
 
 from ..registry import ResumeHandler, ToolConfirmation, ToolHandler, ToolOutcome
 from ..tool_context import ToolContext
@@ -74,6 +74,8 @@ def make_run_sop_handler(sop_service: SopService) -> tuple[ToolHandler, ResumeHa
             state = await sop_service.resume(token, confirmed=confirmed, user_ctx=ctx.user_ctx)
         except KeyError:
             return ToolOutcome(summary="运行实例不存在或已过期", is_error=True)
+        except RunAccessError:
+            return ToolOutcome(summary="无权恢复该运行实例(归属校验未通过)", is_error=True)
         return _outcome(sop_service, state, ctx)
 
     return run_sop, resume
