@@ -46,6 +46,7 @@ dependencies = [
     { name = "orchestrator" },
     { name = "pydantic" },
     { name = "rag-svc" },
+    { name = "scheduler-svc" },
     { name = "sop-executor" },
     { name = "structlog" },
     { name = "uvicorn" },
@@ -63,6 +64,7 @@ requires-dist = [
     { name = "orchestrator", editable = "services/orchestrator" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "rag-svc", editable = "services/rag-svc" },
+    { name = "scheduler-svc", editable = "services/scheduler-svc" },
     { name = "sop-executor", editable = "services/sop-executor" },
     { name = "structlog", specifier = ">=24.1" },
     { name = "uvicorn", specifier = ">=0.30" },
@@ -1059,6 +1061,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "rag-svc" },
     { name = "sandbox-svc" },
+    { name = "scheduler-svc" },
     { name = "sop-executor" },
     { name = "structlog" },
 ]
@@ -1075,6 +1078,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7" },
     { name = "rag-svc", editable = "services/rag-svc" },
     { name = "sandbox-svc", editable = "services/sandbox-svc" },
+    { name = "scheduler-svc", editable = "services/scheduler-svc" },
     { name = "sop-executor", editable = "services/sop-executor" },
     { name = "structlog", specifier = ">=24.1" },
 ]
@@ -1489,18 +1493,16 @@ name = "reflection-worker"
 version = "0.1.0"
 source = { editable = "services/reflection-worker" }
 dependencies = [
-    { name = "common" },
-    { name = "fastapi" },
+    { name = "contracts" },
+    { name = "memory-svc" },
     { name = "pydantic" },
-    { name = "structlog" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "common", editable = "packages/common" },
-    { name = "fastapi", specifier = ">=0.115" },
+    { name = "contracts", editable = "packages/contracts" },
+    { name = "memory-svc", editable = "services/memory-svc" },
     { name = "pydantic", specifier = ">=2.7" },
-    { name = "structlog", specifier = ">=24.1" },
 ]
 
 [[package]]
@@ -1660,18 +1662,16 @@ name = "scheduler-svc"
 version = "0.1.0"
 source = { editable = "services/scheduler-svc" }
 dependencies = [
-    { name = "common" },
-    { name = "fastapi" },
+    { name = "contracts" },
+    { name = "httpx" },
     { name = "pydantic" },
-    { name = "structlog" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "common", editable = "packages/common" },
-    { name = "fastapi", specifier = ">=0.115" },
+    { name = "contracts", editable = "packages/contracts" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic", specifier = ">=2.7" },
-    { name = "structlog", specifier = ">=24.1" },
 ]
 
 [[package]]

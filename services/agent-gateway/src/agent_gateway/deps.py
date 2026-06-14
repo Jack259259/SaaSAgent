@@ -13,15 +13,27 @@ from orchestrator import SessionStore, ToolRegistry, base_tool_handlers
 from orchestrator.skills import SkillIndex
 from orchestrator.tools import (
     make_ask_codebase_handler,
+    make_cancel_schedule_handler,
+    make_escalate_handler,
     make_find_sop_handler,
+    make_list_schedules_handler,
     make_load_skill_handler,
+    make_notify_handler,
     make_query_finance_data_handler,
     make_run_sop_handler,
     make_save_memory_handler,
+    make_schedule_task_handler,
     make_search_knowledge_handler,
     make_search_memory_handler,
 )
 from rag_svc import RagService
+from scheduler_svc import (
+    EscalationService,
+    NotifyService,
+    Scheduler,
+    SqliteScheduleStore,
+    WebhookChannel,
+)
 from sop_executor import SopService
 
 # 进程内会话存储单例(阶段 3 内存版;支撑跨请求暂停/恢复)。
@@ -29,6 +41,11 @@ _SESSION_STORE = SessionStore()
 # 分层记忆服务单例(阶段 9a 内存版;按 tenant+user 隔离)+ 启动构建的 Skill 索引。
 _MEMORY_SERVICE = MemoryService()
 _SKILL_INDEX = SkillIndex.load()
+# 主动性工具单例(阶段 9b):调度(任务表 SQLite;后台轮询 tick 为部署事项,网关只提供工具)、
+# 通知(WebhookChannel,NOTIFY_WEBHOOK_URL 未配置即 NOT_CONFIGURED)、转人工(工单落 docs/ops/tickets)。
+_SCHEDULER = Scheduler(store=SqliteScheduleStore(Path("data/scheduler/schedules.db")))
+_NOTIFY = NotifyService(channel=WebhookChannel())
+_ESCALATION = EscalationService()
 # 知识库索引根目录(由人工上传 + ingest 构建;空则检索返回"未找到依据")。
 _KNOWLEDGE_INDEX_DIR = Path("data/knowledge/.index")
 # 代码索引:仓根(人工 clone 到此)+ 符号库(code-index 构建)。
@@ -71,15 +88,12 @@ def get_skill_index() -> SkillIndex:
 
 
 def get_registry() -> ToolRegistry:
-    """生产默认:基础工具 + 全部领域/记忆/技能工具。
-
-    search_knowledge / query_finance_data / ask_codebase / find_sop / run_sop / save_memory /
-    search_memory / load_skill(红线 5/6/12/4/9)。
-    """
+    """生产默认:基础工具 + 全部领域/记忆/技能/主动性工具(红线 4/5/6/9/12)。"""
     registry = ToolRegistry()
     rag_service = RagService.from_dir(_KNOWLEDGE_INDEX_DIR)
     sop_service = SopService.open()  # sops_dir=assets/sops;业务 API 经 BUSINESS_API_URL
     run_sop_handler, run_sop_resume = make_run_sop_handler(sop_service)
+    schedule_handler, schedule_resume = make_schedule_task_handler(_SCHEDULER)
     handlers = {
         **base_tool_handlers(),
         "search_knowledge": make_search_knowledge_handler(rag_service),
@@ -90,8 +104,15 @@ def get_registry() -> ToolRegistry:
         "save_memory": make_save_memory_handler(_MEMORY_SERVICE),
         "search_memory": make_search_memory_handler(_MEMORY_SERVICE),
         "load_skill": make_load_skill_handler(_SKILL_INDEX),
+        "schedule_task": schedule_handler,
+        "list_schedules": make_list_schedules_handler(_SCHEDULER),
+        "cancel_schedule": make_cancel_schedule_handler(_SCHEDULER),
+        "notify": make_notify_handler(_NOTIFY),
+        "escalate_to_human": make_escalate_handler(_ESCALATION),
     }
-    registry.register_from_contracts(handlers, resumes={"run_sop": run_sop_resume})
+    registry.register_from_contracts(
+        handlers, resumes={"run_sop": run_sop_resume, "schedule_task": schedule_resume}
+    )
     return registry
 
 

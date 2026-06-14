@@ -12,6 +12,7 @@ dependencies = [
     "memory-svc",
     "orchestrator",
     "rag-svc",
+    "scheduler-svc",
     "sop-executor",
     "fastapi>=0.115",
     "pydantic>=2.7",
@@ -32,4 +33,5 @@ llm = { workspace = true }
 memory-svc = { workspace = true }
 orchestrator = { workspace = true }
 rag-svc = { workspace = true }
+scheduler-svc = { workspace = true }
 sop-executor = { workspace = true }

@@ -1,13 +1,12 @@
 [project]
 name = "scheduler-svc"
 version = "0.1.0"
-description = "定时任务与订阅、模板化通知(CLAUDE.md §3 / 方案 §11.1)"
+description = "定时订阅 + 模板化通知 + 转人工(助手域副作用,方案 §5.5)"
 requires-python = ">=3.12"
 dependencies = [
-    "common",
-    "fastapi>=0.115",
+    "contracts",
     "pydantic>=2.7",
-    "structlog>=24.1",
+    "httpx>=0.27",
 ]
 
 [build-system]
@@ -15,4 +14,4 @@ requires = ["uv_build>=0.11,<0.12"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-common = { workspace = true }
+contracts = { workspace = true }

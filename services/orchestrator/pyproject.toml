@@ -12,6 +12,7 @@ dependencies = [
     "memory-svc",
     "rag-svc",
     "sandbox-svc",
+    "scheduler-svc",
     "sop-executor",
     "openpyxl>=3.1",
     "pydantic>=2.7",
@@ -31,4 +32,5 @@ llm = { workspace = true }
 memory-svc = { workspace = true }
 rag-svc = { workspace = true }
 sandbox-svc = { workspace = true }
+scheduler-svc = { workspace = true }
 sop-executor = { workspace = true }
