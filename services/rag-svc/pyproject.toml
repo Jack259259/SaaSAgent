@@ -1,18 +1,21 @@
 [project]
 name = "rag-svc"
 version = "0.1.0"
-description = "LightRAG 双库封装 + ACL 过滤 + 引用组装(CLAUDE.md §3 / 方案 §11.1)"
+description = "知识库 RAG:双库 + 检索前 ACL 过滤 + 引用组装(CLAUDE.md §3 / 方案 §5.3)"
 requires-python = ">=3.12"
 dependencies = [
-    "common",
-    "fastapi>=0.115",
+    "contracts",
+    "llm",
     "pydantic>=2.7",
-    "structlog>=24.1",
 ]
+
+[project.scripts]
+ingest = "rag_svc.ingest:main"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-common = { workspace = true }
+contracts = { workspace = true }
+llm = { workspace = true }

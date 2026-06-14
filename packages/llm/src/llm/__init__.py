@@ -6,6 +6,7 @@ Provider 接口 + AnthropicProvider(真实)/ MockProvider(测试)+ 统一重试 
 from __future__ import annotations
 
 from .anthropic_provider import AnthropicProvider
+from .embedding import Embedder, HashingEmbedder
 from .mock_provider import MockProvider, ScriptedTurn
 from .provider import NotConfiguredError, Provider
 from .retry import RetryConfig, with_retry
@@ -30,6 +31,8 @@ __version__ = "0.1.0"
 
 __all__ = [
     "AnthropicProvider",
+    "Embedder",
+    "HashingEmbedder",
     "LlmResponse",
     "Message",
     "MockProvider",

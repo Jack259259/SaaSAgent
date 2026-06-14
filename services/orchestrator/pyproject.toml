@@ -7,6 +7,7 @@ dependencies = [
     "common",
     "contracts",
     "llm",
+    "rag-svc",
     "sandbox-svc",
     "openpyxl>=3.1",
     "pydantic>=2.7",
@@ -21,4 +22,5 @@ build-backend = "uv_build"
 common = { workspace = true }
 contracts = { workspace = true }
 llm = { workspace = true }
+rag-svc = { workspace = true }
 sandbox-svc = { workspace = true }

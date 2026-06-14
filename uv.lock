@@ -42,6 +42,7 @@ dependencies = [
     { name = "llm" },
     { name = "orchestrator" },
     { name = "pydantic" },
+    { name = "rag-svc" },
     { name = "structlog" },
     { name = "uvicorn" },
 ]
@@ -54,6 +55,7 @@ requires-dist = [
     { name = "llm", editable = "packages/llm" },
     { name = "orchestrator", editable = "services/orchestrator" },
     { name = "pydantic", specifier = ">=2.7" },
+    { name = "rag-svc", editable = "services/rag-svc" },
     { name = "structlog", specifier = ">=24.1" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
@@ -936,6 +938,7 @@ dependencies = [
     { name = "llm" },
     { name = "openpyxl" },
     { name = "pydantic" },
+    { name = "rag-svc" },
     { name = "sandbox-svc" },
     { name = "structlog" },
 ]
@@ -947,6 +950,7 @@ requires-dist = [
     { name = "llm", editable = "packages/llm" },
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "pydantic", specifier = ">=2.7" },
+    { name = "rag-svc", editable = "services/rag-svc" },
     { name = "sandbox-svc", editable = "services/sandbox-svc" },
     { name = "structlog", specifier = ">=24.1" },
 ]
@@ -1299,18 +1303,16 @@ name = "rag-svc"
 version = "0.1.0"
 source = { editable = "services/rag-svc" }
 dependencies = [
-    { name = "common" },
-    { name = "fastapi" },
+    { name = "contracts" },
+    { name = "llm" },
     { name = "pydantic" },
-    { name = "structlog" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "common", editable = "packages/common" },
-    { name = "fastapi", specifier = ">=0.115" },
+    { name = "contracts", editable = "packages/contracts" },
+    { name = "llm", editable = "packages/llm" },
     { name = "pydantic", specifier = ">=2.7" },
-    { name = "structlog", specifier = ">=24.1" },
 ]
 
 [[package]]

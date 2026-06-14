@@ -8,6 +8,7 @@ dependencies = [
     "contracts",
     "llm",
     "orchestrator",
+    "rag-svc",
     "fastapi>=0.115",
     "pydantic>=2.7",
     "structlog>=24.1",
@@ -23,3 +24,4 @@ common = { workspace = true }
 contracts = { workspace = true }
 llm = { workspace = true }
 orchestrator = { workspace = true }
+rag-svc = { workspace = true }

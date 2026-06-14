@@ -1,6 +1,23 @@
-"""rag-svc 服务:LightRAG 双库封装 + ACL 过滤 + 引用组装(CLAUDE.md §3 / 方案 §11.1)。
+"""rag-svc —— 知识库 RAG(双库 + 检索前 ACL 过滤 + 引用,方案 §5.3)。"""
 
-阶段 0 为独立 Python 包骨架(src 布局),具体能力实现见对应阶段。
-"""
+from __future__ import annotations
+
+from . import acl
+from .lightrag_store import LightRagStore
+from .models import Chunk, Citation, RetrievedChunk, SearchResult
+from .service import RagService
+from .store import KnowledgeStore, LocalKnowledgeStore
 
 __version__ = "0.1.0"
+
+__all__ = [
+    "Chunk",
+    "Citation",
+    "KnowledgeStore",
+    "LightRagStore",
+    "LocalKnowledgeStore",
+    "RagService",
+    "RetrievedChunk",
+    "SearchResult",
+    "acl",
+]

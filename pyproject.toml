@@ -51,6 +51,11 @@ strict = true
 pretty = true
 warn_unreachable = true
 
+# lightrag(rag_svc 的 LightRagStore 生产适配器,默认不安装)—— 缺失/未类型化导入豁免。
+[[tool.mypy.overrides]]
+module = ["lightrag", "lightrag.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["packages", "services"]
 addopts = "-q --import-mode=importlib"

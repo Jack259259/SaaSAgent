@@ -13,6 +13,7 @@ from .base import (
     read_workspace,
     write_workspace,
 )
+from .knowledge import make_search_knowledge_handler
 
 
 def base_tool_handlers() -> dict[str, ToolHandler]:
@@ -35,6 +36,7 @@ __all__ = [
     "export_file",
     "get_page_context",
     "make_run_analysis_handler",
+    "make_search_knowledge_handler",
     "parse_user_file",
     "read_workspace",
     "write_workspace",

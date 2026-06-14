@@ -10,7 +10,7 @@
 - [x] 阶段 2:LLM 网关 + 编排器薄循环 + SSE 网关(2026-06-13)—— DoD:`make lint && make test` 全绿(含 e2e:SSE 事件序列 tool_call/tool_result_summary/answer_delta/done、无 user_ctx 拒绝 401 + 审计);commit `feat(orchestrator)`。
 - [x] 阶段 3:Plan&Execute + 行内反思 + 基础工具第一批(7 件)(2026-06-13)—— DoD:`make lint && make test` 全绿(计划→并行→失败→replan→完成、写步骤 confirm 暂停/恢复、ask_user 往返、反思重试≤2、5 件 base 工具、跨租户会话拒绝);commit `feat(orchestrator)`。
 - [x] 阶段 4:sandbox-svc(run_analysis 受限沙箱)(2026-06-13)—— DoD:`make lint && make test` 全绿且红线 11 负例全过(断网/越界读/超时/import 白名单跨平台;超内存 POSIX/CI;正例 CSV→PNG;run_analysis 越权被拒);commit `feat(sandbox)`。
-- [ ] 阶段 5:rag-svc(LightRAG 双库 + ACL 前置过滤)—— DoD:`make lint && make test` 全绿(ACL 负例、引用完整、空目录摄取幂等);commit `feat(rag)`。
+- [x] 阶段 5:rag-svc(双库 RAG + 检索前 ACL 过滤 + 引用)(2026-06-14)—— DoD:`make lint && make test` 全绿(检索前 ACL 负例 tenant 看不到 internal、it_design 仅内部、引用完整、空目录摄取幂等 + hash 增量、Embedder 网关);commit `feat(rag)`。
 - [ ] 阶段 6:data-svc(WrenAI 适配 + SQL 校验层)—— DoD:`make lint && make test` 全绿(DML 拒绝/表白名单/RLS 注入含子查询/自纠路径/LIMIT 包装);commit `feat(data)`。
 - [ ] 阶段 7:code-svc(索引管线 + 符号图 + 代码子 Agent)—— DoD:`make lint && make test` 全绿(sample_repo 问答带 evidences、预算超限部分结论);commit `feat(code)`。
 - [ ] 阶段 8:sop-executor(确定性状态机 + 回放)—— DoD:`make lint && make test && make sop-validate` 全绿(sop-validate 真实现;demo 闭环:暂停→确认→postconditions;负例不报成功);commit `feat(sop)`。
