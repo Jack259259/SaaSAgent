@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from data_svc import DataService, PostgresExecutor, SemanticLayer, SqlValidator, WrenAdapter
 from llm import AnthropicProvider, Provider
 from orchestrator import SessionStore, ToolRegistry, base_tool_handlers
-from orchestrator.tools import make_search_knowledge_handler
+from orchestrator.tools import make_query_finance_data_handler, make_search_knowledge_handler
 from rag_svc import RagService
 
 # 进程内会话存储单例(阶段 3 内存版;支撑跨请求暂停/恢复)。
@@ -20,13 +21,26 @@ def get_provider() -> Provider:
     return AnthropicProvider()
 
 
+def _data_service() -> DataService:
+    """生产默认:WrenAdapter(WREN_API_URL)+ 校验层(tables.yaml)+ PostgresExecutor(DB_DSN_READONLY)。
+
+    未配置 WREN_API_URL / DB_DSN_READONLY 时调用即 NOT_CONFIGURED;校验层(红线 6)始终生效。
+    """
+    return DataService(
+        engine=WrenAdapter(),
+        validator=SqlValidator(SemanticLayer.load()),
+        executor=PostgresExecutor(),
+    )
+
+
 def get_registry() -> ToolRegistry:
-    """生产默认:基础工具第一批 + 领域工具 search_knowledge(检索前 ACL,红线 5)。"""
+    """生产默认:基础工具第一批 + 领域工具 search_knowledge(红线 5)+ query_finance_data(红线 6)。"""
     registry = ToolRegistry()
     rag_service = RagService.from_dir(_KNOWLEDGE_INDEX_DIR)
     handlers = {
         **base_tool_handlers(),
         "search_knowledge": make_search_knowledge_handler(rag_service),
+        "query_finance_data": make_query_finance_data_handler(_data_service()),
     }
     registry.register_from_contracts(handlers)
     return registry

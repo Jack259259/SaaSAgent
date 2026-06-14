@@ -50,10 +50,18 @@ python_version = "3.12"
 strict = true
 pretty = true
 warn_unreachable = true
+# 多个服务 tests/ 下的 conftest.py 同名,mypy 模块解析会冲突;测试夹具(pytest fixtures)
+# 已被测试运行时覆盖,不纳入严格类型门禁(测试用例本身仍全量类型检查)。
+exclude = ['(^|/)conftest\.py$']
 
 # lightrag(rag_svc 的 LightRagStore 生产适配器,默认不安装)—— 缺失/未类型化导入豁免。
 [[tool.mypy.overrides]]
 module = ["lightrag", "lightrag.*"]
+ignore_missing_imports = true
+
+# psycopg(data_svc 的 PostgresExecutor 生产依赖,默认不安装,懒导入)—— 缺失导入豁免。
+[[tool.mypy.overrides]]
+module = ["psycopg", "psycopg.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

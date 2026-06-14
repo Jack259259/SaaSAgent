@@ -1,0 +1,17 @@
+# 取数表白名单 + 每表 RLS 配置(资产,走评审 —— 红线 6 / 红线 10)。
+# 校验层(data-svc/validator.py)据此:① 仅白名单内的表可被查询;
+# ② 配 rls.tenant_column 的表,检索前自动 AND 注入 `<别名>.<tenant列> = '<tenant_id>'`(含子查询/CTE)。
+# 本阶段为 3 张**虚构**示例表(无真实业务口径),供测试与演示;真实语义层由数据团队维护。
+tables:
+  fund_plan:            # 资金计划(虚构示例)
+    columns: [plan_id, tenant_id, org_id, period, plan_amount, exec_amount, currency, version]
+    rls:
+      tenant_column: tenant_id
+  plan_subject:         # 计划科目(虚构示例)
+    columns: [subject_id, tenant_id, plan_id, subject_code, subject_name, amount]
+    rls:
+      tenant_column: tenant_id
+  exec_flow:            # 执行流水(虚构示例)
+    columns: [flow_id, tenant_id, plan_id, exec_date, amount, status]
+    rls:
+      tenant_column: tenant_id

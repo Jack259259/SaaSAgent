@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "common",
     "contracts",
+    "data-svc",
     "llm",
     "orchestrator",
     "rag-svc",
@@ -22,6 +23,7 @@ build-backend = "uv_build"
 [tool.uv.sources]
 common = { workspace = true }
 contracts = { workspace = true }
+data-svc = { workspace = true }
 llm = { workspace = true }
 orchestrator = { workspace = true }
 rag-svc = { workspace = true }
