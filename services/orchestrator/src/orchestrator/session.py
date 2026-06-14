@@ -51,6 +51,7 @@ class Session:
     verdicts: list[dict[str, Any]] = field(default_factory=list)
     used_steps: int = 0
     used_cost: float = 0.0
+    used_tokens: int = 0
     replan_count: int = 0
     page_context: dict[str, Any] | None = None
 

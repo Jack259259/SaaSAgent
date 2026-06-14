@@ -13,6 +13,7 @@ from .base import (
     read_workspace,
     write_workspace,
 )
+from .codebase import make_ask_codebase_handler
 from .data import make_query_finance_data_handler
 from .knowledge import make_search_knowledge_handler
 
@@ -36,6 +37,7 @@ __all__ = [
     "base_tool_handlers",
     "export_file",
     "get_page_context",
+    "make_ask_codebase_handler",
     "make_query_finance_data_handler",
     "make_run_analysis_handler",
     "make_search_knowledge_handler",

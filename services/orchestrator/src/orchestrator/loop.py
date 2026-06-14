@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import AsyncIterator, Iterator, Sequence
+from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -75,6 +75,7 @@ _CAP_VALUES = {c.value for c in CapabilityHint}
 class Budget:
     max_steps: int = 8
     max_cost: float = 5.0
+    max_tokens: int | None = None  # None=不限;子 Agent 用它做独立 token 预算(§5.1)
 
 
 def _chunks(text: str, n: int) -> Iterator[str]:
@@ -121,6 +122,7 @@ class Orchestrator:
         compactor: Compactor | None = None,
         budget: Budget | None = None,
         no_progress_limit: int = 2,
+        system_prompt: Callable[[], str] | None = None,
     ) -> None:
         self._provider = provider
         self._registry = registry
@@ -128,6 +130,8 @@ class Orchestrator:
         self._compactor = compactor or TruncationCompactor()
         self._budget = budget or Budget()
         self._no_progress_limit = no_progress_limit
+        # 可注入系统提示(子 Agent 用 §5.1 专属协议提示);默认仍是主 Agent 提示。
+        self._system_prompt = system_prompt
         # update_plan / ask_user 由循环拦截,但仍需把其 ToolDef 暴露给 LLM 以便其调用。
         by_name = {ls.spec.name: ls.spec for ls in load_toolspecs()}
         self._intercept_defs = [
@@ -216,6 +220,7 @@ class Orchestrator:
 
             response = await self._run_turn(session.messages)
             session.used_cost += response.usage.cost_usd
+            session.used_tokens += response.usage.input_tokens + response.usage.output_tokens
 
             ask_call = self._find_call(response, "ask_user")
             plan_call = self._find_call(response, "update_plan")
@@ -466,6 +471,10 @@ class Orchestrator:
         return (
             session.used_steps >= self._budget.max_steps
             or session.used_cost >= self._budget.max_cost
+            or (
+                self._budget.max_tokens is not None
+                and session.used_tokens >= self._budget.max_tokens
+            )
         )
 
     def _workspace_brief(self, session: Session) -> str:
@@ -489,9 +498,8 @@ class Orchestrator:
     async def _run_turn(self, messages: Sequence[Message]) -> LlmResponse:
         tool_defs = [*self._registry.tool_defs(), *self._intercept_defs]
         response: LlmResponse | None = None
-        async for ev in self._provider.stream(
-            system=build_system_prompt(), messages=messages, tools=tool_defs
-        ):
+        system = self._system_prompt() if self._system_prompt is not None else build_system_prompt()
+        async for ev in self._provider.stream(system=system, messages=messages, tools=tool_defs):
             if isinstance(ev, TextDelta):
                 continue
             if isinstance(ev, StreamDone):

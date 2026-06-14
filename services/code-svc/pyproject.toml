@@ -1,18 +1,26 @@
 [project]
 name = "code-svc"
 version = "0.1.0"
-description = "代码子 Agent 运行时 + Zoekt/符号图查询接口(CLAUDE.md §3 / 方案 §11.1)"
+description = "代码检索分析子 Agent:tree-sitter 符号库 + repo map + Zoekt/ripgrep 词法检索(方案 §5.1)"
 requires-python = ">=3.12"
 dependencies = [
-    "common",
-    "fastapi>=0.115",
+    "contracts",
     "pydantic>=2.7",
-    "structlog>=24.1",
+    "tree-sitter>=0.23",
+    "tree-sitter-python>=0.23",
+    "tree-sitter-javascript>=0.23",
+    "tree-sitter-typescript>=0.23",
+    "tree-sitter-java>=0.23",
+    "tree-sitter-sql>=0.3",
+    "httpx>=0.27",
 ]
+
+[project.scripts]
+code-index = "code_svc.indexer:main"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-common = { workspace = true }
+contracts = { workspace = true }

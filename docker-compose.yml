@@ -38,5 +38,18 @@ name: zijin-plan-agent
 #     ports:
 #       - "3000:3000"
 #
+#   # 代码词法索引(阶段 7,code-svc)。默认停用;启用后 code-svc 经 ZOEKT_URL 接入,
+#   # 未运行时 search_code 自动回退 ripgrep 子进程(见 code_svc/search.py)。
+#   # 索引由 zoekt-indexserver 对挂载的 data/repos 构建;此处给最小 webserver 定义。
+#   zoekt:
+#     image: sourcegraph/zoekt-webserver:latest
+#     command: ["-listen", ":6070", "-index", "/data/index"]
+#     volumes:
+#       - zoekt-index:/data/index
+#       - ./data/repos:/data/repos:ro
+#     ports:
+#       - "6070:6070"
+#
 # volumes:
 #   pgdata:
+#   zoekt-index:
