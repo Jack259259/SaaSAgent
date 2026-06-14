@@ -1,13 +1,15 @@
 [project]
 name = "sop-executor"
 version = "0.1.0"
-description = "确定性状态机 + Playwright 工作池 + 审批挂接(CLAUDE.md §3 / 方案 §11.1)"
+description = "SOP 确定性状态机 + 确认恢复 + postconditions 回查 + 回放(方案 §5.4)"
 requires-python = ">=3.12"
 dependencies = [
-    "common",
-    "fastapi>=0.115",
+    "contracts",
     "pydantic>=2.7",
-    "structlog>=24.1",
+    "httpx>=0.27",
+    "pyyaml>=6",
+    "jsonschema>=4.21",
+    "playwright>=1.40",
 ]
 
 [build-system]
@@ -15,4 +17,4 @@ requires = ["uv_build>=0.11,<0.12"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-common = { workspace = true }
+contracts = { workspace = true }

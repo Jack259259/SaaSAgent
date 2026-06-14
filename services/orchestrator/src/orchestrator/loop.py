@@ -202,6 +202,30 @@ class Orchestrator:
             session.messages.append(
                 tool_results_message([ToolResultBlock(pending.tool_use_id or "ask_user", content)])
             )
+        elif pending is not None and pending.kind == "tool_confirm":
+            confirmed = bool(confirmation and confirmation.get("confirmed"))
+            outcome = await self._registry.resume_tool(
+                pending.tool_name or "",
+                pending.confirm_token or "",
+                confirmed,
+                self._tool_context(session),
+            )
+            ref = session.workspace.put(
+                key=pending.tool_name or "tool",
+                type="tool_result",
+                summary=outcome.summary,
+                raw=outcome.raw,
+            )
+            yield ToolResultSummaryEvent(
+                id=pending.confirm_token or "",
+                tool=pending.tool_name or "",
+                summary=outcome.summary,
+                workspace_ref=ref,
+            )
+            # 续行结果作为数据消息回灌(原 tool_use 已应答 paused 结果)。
+            session.messages.append(
+                Message(role=Role.user, content=[TextBlock(f"[SOP 续行结果] {outcome.summary}")])
+            )
         session.pending = None
         async for event in self.advance(session):
             yield event
@@ -281,6 +305,21 @@ class Orchestrator:
                 session.messages.append(tool_results_message(result_blocks))
                 session.messages = self._compactor.compact(session.messages)
                 session.used_steps += 1
+                for call, outcome in zip(response.tool_calls, outcomes, strict=True):
+                    conf = outcome.confirmation
+                    if conf is None:
+                        continue
+                    # 红线 4:工具中途请求确认 → 暂停发 confirm_request,等回执续行。
+                    session.pending = Pending(
+                        kind="tool_confirm",
+                        tool_use_id=call.id,
+                        tool_name=call.name,
+                        confirm_token=conf.token,
+                    )
+                    yield ConfirmRequestEvent(
+                        id=conf.token, prompt=conf.prompt, options=["confirm", "cancel"]
+                    )
+                    return
                 no_progress = 0 if made_progress else no_progress + 1
                 if no_progress >= self._no_progress_limit:
                     yield AnswerDeltaEvent("(连续多步无新信息,停止以防打转。)")

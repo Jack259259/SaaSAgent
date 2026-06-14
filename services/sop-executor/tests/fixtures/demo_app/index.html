@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <title>Demo 新建条目</title>
+  </head>
+  <body>
+    <h1>新建条目(演示)</h1>
+    <form id="item-form">
+      <input data-testid="name" name="name" placeholder="名称" />
+      <input data-testid="amount" name="amount" placeholder="金额" />
+      <button data-testid="save" type="button" onclick="onSave()">保存</button>
+    </form>
+    <div data-testid="result"></div>
+    <script>
+      function onSave() {
+        var name = document.querySelector('[data-testid="name"]').value;
+        document.querySelector('[data-testid="result"]').textContent = "saved:" + name;
+      }
+    </script>
+  </body>
+</html>

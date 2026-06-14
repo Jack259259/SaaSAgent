@@ -57,15 +57,18 @@ contract-test: sync
 	$(UV) run pytest packages/contracts
 
 # E 必须是 EVAL_SETS 之一;缺失/非法以退出码 1 给出 usage(尚未实现的真实 runner 以退出码 2)。
-eval:
+# sop-replay(阶段 8 真实现):回放 assets/sops 全量,失败标 <id>.stale。
+eval: sync
 ifeq ($(filter $(E),$(EVAL_SETS)),)
 	@echo "usage: make eval E=<nl2sql|rag-qa|code-qa|sop-replay|e2e>"
 	@exit 1
+else ifeq ($(E),sop-replay)
+	$(UV) run python -m sop_executor.replay assets/sops
 else
 	@echo "make eval E=$(E): NOT IMPLEMENTED (see PROGRESS.md)"
 	@exit 2
 endif
 
-sop-validate:
-	@echo "make sop-validate: NOT IMPLEMENTED (see PROGRESS.md)"
-	@exit 2
+# assets/sops schema 校验 + 静态交叉校验(阶段 8 真实现)。
+sop-validate: sync
+	$(UV) run python -m sop_executor.sopcheck assets/sops

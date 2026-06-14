@@ -13,7 +13,7 @@
 - [x] 阶段 5:rag-svc(双库 RAG + 检索前 ACL 过滤 + 引用)(2026-06-14)—— DoD:`make lint && make test` 全绿(检索前 ACL 负例 tenant 看不到 internal、it_design 仅内部、引用完整、空目录摄取幂等 + hash 增量、Embedder 网关);commit `feat(rag)`。
 - [x] 阶段 6:data-svc(WrenAI 适配 + SQL 校验层 + RLS)(2026-06-14)—— DoD:`make lint && make test` 全绿(DML/DDL 拒绝、表白名单、RLS 注入含子查询/CTE、行级隔离、自纠路径、LIMIT 包装、AMBIGUOUS→ask_user 集成、NOT_CONFIGURED);commit `feat(data)`。
 - [x] 阶段 7:code-svc(索引管线 + 符号图 + 代码子 Agent)(2026-06-14)—— DoD:`make lint && make test` 全绿(tree-sitter 符号抽取、find_definition/references/callers、repo map 度中心性 + token 截断、ripgrep/python 检索一致、read_file 越界拒、空目录幂等;子 Agent sample_repo 问答带 evidences、预算超限部分结论);commit `feat(code)`。
-- [ ] 阶段 8:sop-executor(确定性状态机 + 回放)—— DoD:`make lint && make test && make sop-validate` 全绿(sop-validate 真实现;demo 闭环:暂停→确认→postconditions;负例不报成功);commit `feat(sop)`。
+- [x] 阶段 8:sop-executor(确定性状态机 + 回放)(2026-06-14)—— DoD:`make lint && make test && make sop-validate` 全绿(sop-validate 真实现:schema + 占位符/confirm/api·ui 交叉校验;demo 闭环:执行→暂停→确认→完成→postconditions 回查;postcondition 失败/拒绝确认/precondition/步骤失败负例不报成功;Playwright 驱动 demo 页;run_sop 经编排器 tool_confirm 双闸;make eval E=sop-replay 接入);commit `feat(sop)`。
 - [ ] 阶段 9a:memory-svc + Skill 装载 —— DoD:`make lint && make test` 全绿(租户隔离负例、写入门槛、脱敏钩子、Skill 渐进式披露);commit `feat(memory)` / `feat(skills)`。
 - [ ] 阶段 9b:scheduler-svc + notify + escalate + reflection-worker —— DoD:`make lint && make test` 全绿(订阅确认流、预算停用、频控、经验评分入库、审计断言);commit `feat(scheduler)` / `feat(reflection)`。
 - [ ] 阶段 10:评估套件 + 全链路追踪 + 安全负例收尾 —— DoD:`make lint && make test && make contract-test && make eval E=e2e` 全绿(eval 真实现;tests/security 全过);`docs/acceptance-v0.md` 生成;commit `chore(release)`。

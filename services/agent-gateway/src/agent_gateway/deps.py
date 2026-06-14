@@ -11,10 +11,13 @@ from llm import AnthropicProvider, Provider
 from orchestrator import SessionStore, ToolRegistry, base_tool_handlers
 from orchestrator.tools import (
     make_ask_codebase_handler,
+    make_find_sop_handler,
     make_query_finance_data_handler,
+    make_run_sop_handler,
     make_search_knowledge_handler,
 )
 from rag_svc import RagService
+from sop_executor import SopService
 
 # 进程内会话存储单例(阶段 3 内存版;支撑跨请求暂停/恢复)。
 _SESSION_STORE = SessionStore()
@@ -52,16 +55,23 @@ def _code_service() -> CodeService:
 
 
 def get_registry() -> ToolRegistry:
-    """生产默认:基础工具 + search_knowledge / query_finance_data / ask_codebase(红线 5/6/12)。"""
+    """生产默认:基础工具 + 全部领域工具。
+
+    search_knowledge / query_finance_data / ask_codebase / find_sop / run_sop(红线 5/6/12/4)。
+    """
     registry = ToolRegistry()
     rag_service = RagService.from_dir(_KNOWLEDGE_INDEX_DIR)
+    sop_service = SopService.open()  # sops_dir=assets/sops;业务 API 经 BUSINESS_API_URL
+    run_sop_handler, run_sop_resume = make_run_sop_handler(sop_service)
     handlers = {
         **base_tool_handlers(),
         "search_knowledge": make_search_knowledge_handler(rag_service),
         "query_finance_data": make_query_finance_data_handler(_data_service()),
         "ask_codebase": make_ask_codebase_handler(get_provider(), _code_service()),
+        "find_sop": make_find_sop_handler(sop_service),
+        "run_sop": run_sop_handler,
     }
-    registry.register_from_contracts(handlers)
+    registry.register_from_contracts(handlers, resumes={"run_sop": run_sop_resume})
     return registry
 
 

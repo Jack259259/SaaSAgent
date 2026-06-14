@@ -11,6 +11,7 @@ dependencies = [
     "llm",
     "rag-svc",
     "sandbox-svc",
+    "sop-executor",
     "openpyxl>=3.1",
     "pydantic>=2.7",
     "structlog>=24.1",
@@ -28,3 +29,4 @@ data-svc = { workspace = true }
 llm = { workspace = true }
 rag-svc = { workspace = true }
 sandbox-svc = { workspace = true }
+sop-executor = { workspace = true }

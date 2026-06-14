@@ -1,0 +1,42 @@
+# 演示 SOP(虚构,无真实业务口径):在 demo 应用创建一个条目。
+# api 块为确定性写(优先执行);ui 步为页面引导资产(供 Playwright / 页内引导);
+# requires_confirmation=true + ui 含 confirm 步(一致);postconditions 经 api 回查真成功。
+id: demo.create-item
+name: 新建条目
+description: 在 demo 应用创建一个条目(演示确认暂停与 postconditions 回查)。
+aliases: [新建条目, 创建条目, 添加条目, create item, new item]
+domain: demo
+side_effects: write
+requires_confirmation: true
+preconditions:
+  permissions: [sop.write.run]
+  prerequisite_state: 用户已登录 demo 应用
+  blocking_when: 同名条目已存在
+inputs:
+  - { key: name, label: 名称, type: string, required: true }
+  - { key: amount, label: 金额, type: number, required: true }
+api:
+  calls:
+    - method: POST
+      path: /items
+      body: { name: "{{name}}", amount: "{{amount}}" }
+      capture: { item_id: id }
+ui:
+  steps:
+    - { instruction: 填写名称, target: { testid: name }, action: fill, value: "{{name}}" }
+    - { instruction: 填写金额, target: { testid: amount }, action: fill, value: "{{amount}}" }
+    - { instruction: 点击保存(需确认), target: { testid: save }, action: click, confirm: true }
+postconditions:
+  human_readable: 条目已创建且状态为 created
+  verify:
+    api: { method: GET, path: "/items/{{item_id}}" }
+    expect: { status: created }
+on_failure:
+  - when: "status=409"
+    hint: "同名条目已存在,请换个名称后重试"
+  - when: "*"
+    hint: "创建失败,请稍后重试或联系支持"
+meta:
+  owner: platform-team
+  source: demo
+  version: "1.0"

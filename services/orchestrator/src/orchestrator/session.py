@@ -29,10 +29,12 @@ class SessionAccessError(Exception):
 class Pending:
     """当前等待的用户交互(暂停点)。"""
 
-    kind: str  # "confirm" | "ask_user"
+    kind: str  # "confirm" | "ask_user" | "tool_confirm"
     step_id: str | None = None
     tool_use_id: str | None = None
     questions: list[dict[str, Any]] | None = None
+    tool_name: str | None = None  # tool_confirm:待续行的工具名
+    confirm_token: str | None = None  # tool_confirm:续行令牌(如 SOP run_id)
 
 
 @dataclass

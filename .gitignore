@@ -25,3 +25,6 @@ build/
 data/**
 !data/**/
 !data/**/README.md
+
+# SOP 回放失败标记(CI 产物,不入库;阶段 8)
+*.stale

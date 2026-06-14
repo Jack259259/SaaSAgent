@@ -1,6 +1,42 @@
-"""sop-executor 服务:确定性状态机 + Playwright 工作池 + 审批挂接(CLAUDE.md §3 / 方案 §11.1)。
+"""sop-executor:SOP 确定性状态机 + 确认恢复 + postconditions 回查 + 回放(方案 §5.4)。
 
-阶段 0 为独立 Python 包骨架(src 布局),具体能力实现见对应阶段。
+对外能力经 find_sop / run_sop 契约;本包提供 SopService / SopExecutor / sopcheck / replay。
 """
 
+from __future__ import annotations
+
+from .executor import SopExecutor
+from .httpcaller import HttpCaller
+from .models import (
+    Confirmation,
+    RunReport,
+    RunState,
+    RunStatus,
+    Sop,
+    SopMatch,
+    StepResult,
+)
+from .runstore import InMemoryRunStore, RunStore
+from .service import SopService
+from .steprunner import FakeUiRunner, PlaywrightUiRunner, UiStepRunner
+
 __version__ = "0.1.0"
+
+__all__ = [
+    "Confirmation",
+    "FakeUiRunner",
+    "HttpCaller",
+    "InMemoryRunStore",
+    "PlaywrightUiRunner",
+    "RunReport",
+    "RunState",
+    "RunStatus",
+    "RunStore",
+    "Sop",
+    "SopExecutor",
+    "SopMatch",
+    "SopService",
+    "StepResult",
+    "UiStepRunner",
+    "__version__",
+]
