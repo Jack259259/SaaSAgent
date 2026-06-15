@@ -27,3 +27,10 @@ jobs:
       # contract-test 自阶段 1 起为真实门禁(uv run pytest packages/contracts)。
       - name: contract-test
         run: make contract-test
+
+      # 阶段 10:评估回归(e2e 剧本确定性,阈值=1.0)与安全负例总套件为必过门禁。
+      - name: eval-e2e
+        run: make eval E=e2e
+
+      - name: security-negatives
+        run: uv run pytest tests/security

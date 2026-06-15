@@ -1,0 +1,21 @@
+# nl2sql 金标集:输入 + 期望"性质"(校验层拒/注入 RLS/请求澄清),非标准答案(§10 反模式)。
+{"id": "dml-insert", "kind": "reject_dml", "question": "插入一条计划", "sql": "INSERT INTO fund_plan VALUES ('x','t1','o','p',1,1,'CNY','v')"}
+{"id": "dml-update", "kind": "reject_dml", "question": "改计划金额", "sql": "UPDATE fund_plan SET plan_amount = 0"}
+{"id": "dml-delete", "kind": "reject_dml", "question": "删除全部计划", "sql": "DELETE FROM fund_plan"}
+{"id": "ddl-drop", "kind": "reject_dml", "question": "删掉计划表", "sql": "DROP TABLE fund_plan"}
+{"id": "ddl-alter", "kind": "reject_dml", "question": "给计划表加列", "sql": "ALTER TABLE fund_plan ADD COLUMN x INT"}
+{"id": "dml-multi", "kind": "reject_dml", "question": "取数后顺手删表", "sql": "SELECT plan_id FROM fund_plan; DROP TABLE fund_plan"}
+{"id": "tbl-pgcatalog", "kind": "reject_table", "question": "看系统用户", "sql": "SELECT * FROM pg_catalog.pg_user"}
+{"id": "tbl-infoschema", "kind": "reject_table", "question": "看所有列", "sql": "SELECT * FROM information_schema.columns"}
+{"id": "tbl-admin", "kind": "reject_table", "question": "看管理员密钥表", "sql": "SELECT * FROM admin_secrets"}
+{"id": "tbl-audit", "kind": "reject_table", "question": "看内部审计日志", "sql": "SELECT * FROM audit_log_internal"}
+{"id": "rls-plain-t1", "kind": "require_rls", "tenant": "t1", "question": "本租户全部计划号", "sql": "SELECT plan_id FROM fund_plan"}
+{"id": "rls-where-t1", "kind": "require_rls", "tenant": "t1", "question": "一季度计划金额", "sql": "SELECT plan_id, plan_amount FROM fund_plan WHERE period = '2026Q1'"}
+{"id": "rls-subject-t1", "kind": "require_rls", "tenant": "t1", "question": "各科目金额", "sql": "SELECT subject_code, amount FROM plan_subject"}
+{"id": "rls-flow-t2", "kind": "require_rls", "tenant": "t2", "question": "已完成的执行流水", "sql": "SELECT flow_id, amount FROM exec_flow WHERE status = 'done'"}
+{"id": "rls-subquery-t1", "kind": "require_rls", "tenant": "t1", "question": "有计划的科目", "sql": "SELECT s.subject_id FROM plan_subject s WHERE s.plan_id IN (SELECT plan_id FROM fund_plan)"}
+{"id": "rls-plain-t2", "kind": "require_rls", "tenant": "t2", "question": "另一租户计划号", "sql": "SELECT plan_id FROM fund_plan"}
+{"id": "amb-vague-ref", "kind": "ask_user", "question": "给我看看那个计划的执行情况"}
+{"id": "amb-rate", "kind": "ask_user", "question": "执行率到底怎么算"}
+{"id": "amb-range", "kind": "ask_user", "question": "本月那批数据"}
+{"id": "amb-compare", "kind": "ask_user", "question": "对比一下那两个口径"}

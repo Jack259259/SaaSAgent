@@ -14,6 +14,7 @@ from typing import Any, cast
 
 from .provider import NotConfiguredError
 from .retry import RetryConfig, with_retry
+from .tracing import current_trace_id, tracer
 from .types import (
     ContentBlock,
     LlmResponse,
@@ -139,7 +140,8 @@ class AnthropicProvider:
                 messages=self._to_api_messages(messages),
             )
 
-        resp = await with_retry(_call, self._retry)
+        with tracer().span("llm.complete", trace_id=current_trace_id()):
+            resp = await with_retry(_call, self._retry)
         text, tool_calls, raw = self._parse_content(resp.content)
         return LlmResponse(
             text=text,
@@ -158,25 +160,26 @@ class AnthropicProvider:
         max_tokens: int = 4096,
     ) -> AsyncIterator[StreamEvent]:
         client = self._ensure_client()
-        async with client.messages.stream(
-            model=self._model,
-            max_tokens=max_tokens,
-            system=self._system_param(system),
-            tools=self._to_api_tools(tools),
-            messages=self._to_api_messages(messages),
-        ) as stream:
-            async for text in stream.text_stream:
-                yield TextDelta(cast(str, text))
-            final = await stream.get_final_message()
-        text, tool_calls, raw = self._parse_content(final.content)
-        for tc in tool_calls:
-            yield ToolCallStarted(tc)
-        yield StreamDone(
-            LlmResponse(
-                text=text,
-                tool_calls=tool_calls,
-                stop_reason=str(final.stop_reason or "end_turn"),
-                usage=self._usage(final.usage),
-                raw_content=raw,
+        with tracer().span("llm.stream", trace_id=current_trace_id()):
+            async with client.messages.stream(
+                model=self._model,
+                max_tokens=max_tokens,
+                system=self._system_param(system),
+                tools=self._to_api_tools(tools),
+                messages=self._to_api_messages(messages),
+            ) as stream:
+                async for text in stream.text_stream:
+                    yield TextDelta(cast(str, text))
+                final = await stream.get_final_message()
+            text, tool_calls, raw = self._parse_content(final.content)
+            for tc in tool_calls:
+                yield ToolCallStarted(tc)
+            yield StreamDone(
+                LlmResponse(
+                    text=text,
+                    tool_calls=tool_calls,
+                    stop_reason=str(final.stop_reason or "end_turn"),
+                    usage=self._usage(final.usage),
+                    raw_content=raw,
+                )
             )
-        )

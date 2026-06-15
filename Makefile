@@ -15,7 +15,7 @@ UV ?= uv
 # 自动发现全部工作区包(packages/* + services/*),新增包无需再改此处。
 PKGS := $(wildcard packages/*) $(wildcard services/*)
 
-MYPY_PATHS := $(foreach p,$(PKGS),$(p)/src $(p)/tests)
+MYPY_PATHS := $(foreach p,$(PKGS),$(p)/src $(p)/tests) evals/src evals/tests tests/security
 
 EVAL_SETS := nl2sql rag-qa code-qa sop-replay e2e
 
@@ -65,8 +65,7 @@ ifeq ($(filter $(E),$(EVAL_SETS)),)
 else ifeq ($(E),sop-replay)
 	$(UV) run python -m sop_executor.replay assets/sops
 else
-	@echo "make eval E=$(E): NOT IMPLEMENTED (see PROGRESS.md)"
-	@exit 2
+	$(UV) run python -m evalkit $(E)
 endif
 
 # assets/sops schema 校验 + 静态交叉校验(阶段 8 真实现)。

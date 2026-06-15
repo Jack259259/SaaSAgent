@@ -40,6 +40,7 @@ from llm import (
     ToolResultBlock,
     ToolUseBlock,
     assistant_message,
+    bind_trace,
     tool_results_message,
 )
 
@@ -164,6 +165,8 @@ class Orchestrator:
 
     async def advance(self, session: Session) -> AsyncIterator[OrchestratorEvent]:
         """驱动会话直到下一个暂停点(设置 session.pending)或完成(phase=done)。"""
+        # 全链路 trace_id 绑定本执行上下文:provider span 据此串接(子 Agent 复绑同值)。
+        bind_trace(session.trace_id)
         while session.phase != "done" and session.pending is None:
             phase = session.phase
             if phase == "planning":

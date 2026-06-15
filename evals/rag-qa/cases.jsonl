@@ -1,0 +1,16 @@
+# rag-qa 金标集:grounding(命中期望来源)/ acl_negative(越权来源不出现)/ refuse(无据拒答)。
+{"id": "g-internal-sees-internal", "kind": "grounded", "store": "main", "roles": ["internal_support"], "tenant": "t", "kb": "business", "question": "执行率口径", "expect_sources": ["内部"]}
+{"id": "g-internal-sees-public", "kind": "grounded", "store": "main", "roles": ["internal_support"], "tenant": "t", "kb": "business", "question": "执行率口径", "expect_sources": ["公开"]}
+{"id": "g-tenant-sees-public", "kind": "grounded", "store": "main", "roles": ["tenant_user"], "tenant": "t", "kb": "business", "question": "执行率口径", "expect_sources": ["公开"]}
+{"id": "g-tenant-sees-tenant", "kind": "grounded", "store": "main", "roles": ["tenant_user"], "tenant": "t", "kb": "business", "question": "执行率口径", "expect_sources": ["租户"]}
+{"id": "g-internal-itdesign", "kind": "grounded", "store": "main", "roles": ["internal_dev"], "tenant": "t", "kb": "it_design", "question": "执行率口径", "expect_sources": ["内部"]}
+{"id": "g-analyst-public", "kind": "grounded", "store": "main", "roles": ["analyst"], "tenant": "t", "kb": "business", "question": "执行率口径", "expect_sources": ["公开"]}
+{"id": "g-acme-private", "kind": "grounded", "store": "acme", "roles": ["tenant_user"], "tenant": "t_acme", "kb": "business", "question": "执行率口径", "expect_sources": ["ACME"]}
+{"id": "g-internal-sees-tenant", "kind": "grounded", "store": "main", "roles": ["internal_support"], "tenant": "t", "kb": "business", "question": "执行率口径", "expect_sources": ["租户"]}
+{"id": "g-tenantadmin-public", "kind": "grounded", "store": "main", "roles": ["tenant_admin"], "tenant": "t", "kb": "business", "question": "执行率口径", "expect_sources": ["公开"]}
+{"id": "n-tenant-no-internal", "kind": "acl_negative", "store": "main", "roles": ["tenant_user"], "tenant": "t", "kb": "business", "question": "执行率口径", "forbid_sources": ["内部"]}
+{"id": "n-analyst-only-public", "kind": "acl_negative", "store": "main", "roles": ["analyst"], "tenant": "t", "kb": "business", "question": "执行率口径", "forbid_sources": ["内部", "租户"]}
+{"id": "n-cross-tenant-acme", "kind": "acl_negative", "store": "acme", "roles": ["tenant_user"], "tenant": "t_other", "kb": "business", "question": "执行率口径", "forbid_sources": ["ACME"]}
+{"id": "r-tenant-itdesign", "kind": "refuse", "store": "main", "roles": ["tenant_user"], "tenant": "t", "kb": "it_design", "question": "执行率口径"}
+{"id": "r-analyst-itdesign", "kind": "refuse", "store": "main", "roles": ["analyst"], "tenant": "t", "kb": "it_design", "question": "执行率口径"}
+{"id": "r-cross-tenant", "kind": "refuse", "store": "acme", "roles": ["tenant_user"], "tenant": "t_zzz", "kb": "business", "question": "执行率口径"}

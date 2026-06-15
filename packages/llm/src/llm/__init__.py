@@ -10,6 +10,14 @@ from .embedding import Embedder, HashingEmbedder
 from .mock_provider import MockProvider, ScriptedTurn
 from .provider import NotConfiguredError, Provider
 from .retry import RetryConfig, with_retry
+from .tracing import (
+    LocalTracer,
+    Tracer,
+    bind_trace,
+    current_trace_id,
+    get_tracer,
+    tracer,
+)
 from .types import (
     LlmResponse,
     Message,
@@ -34,6 +42,7 @@ __all__ = [
     "Embedder",
     "HashingEmbedder",
     "LlmResponse",
+    "LocalTracer",
     "Message",
     "MockProvider",
     "NotConfiguredError",
@@ -49,8 +58,13 @@ __all__ = [
     "ToolDef",
     "ToolResultBlock",
     "ToolUseBlock",
+    "Tracer",
     "Usage",
     "assistant_message",
+    "bind_trace",
+    "current_trace_id",
+    "get_tracer",
     "tool_results_message",
+    "tracer",
     "with_retry",
 ]

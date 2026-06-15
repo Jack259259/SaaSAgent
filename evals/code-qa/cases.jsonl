@@ -1,0 +1,11 @@
+# code-qa 金标集:在 sample_repo 上核对检索证据(file / 符号),不喂标准答案。
+{"id": "def-safe-div", "kind": "find_definition", "target": "safe_div", "expect_files": ["mathutils.py"]}
+{"id": "def-execution-rate", "kind": "find_definition", "target": "execution_rate", "expect_files": ["calculator.py"]}
+{"id": "def-variance", "kind": "find_definition", "target": "variance", "expect_files": ["calculator.py"]}
+{"id": "def-summarize-plan", "kind": "find_definition", "target": "summarize_plan", "expect_files": ["service.py"]}
+{"id": "def-format-summary", "kind": "find_definition", "target": "format_summary", "expect_files": ["formatting.py"]}
+{"id": "def-load-plan", "kind": "find_definition", "target": "load_plan", "expect_files": ["repository.py"]}
+{"id": "def-clamp", "kind": "find_definition", "target": "clamp", "expect_files": ["mathutils.py"]}
+{"id": "callers-safe-div", "kind": "find_callers", "target": "safe_div", "expect_symbols": ["execution_rate", "variance"]}
+{"id": "refs-safe-div", "kind": "find_references", "target": "safe_div", "expect_files": ["calculator.py", "mathutils.py"]}
+{"id": "search-safe-div", "kind": "search_code", "target": "safe_div", "min_hits": 2, "expect_files": ["mathutils.py", "calculator.py"]}

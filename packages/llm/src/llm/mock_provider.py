@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field
 
+from .tracing import current_trace_id, tracer
 from .types import (
     ContentBlock,
     LlmResponse,
@@ -83,7 +84,8 @@ class MockProvider:
         tools: Sequence[ToolDef] = (),
         max_tokens: int = 4096,
     ) -> LlmResponse:
-        return self._response(self._pick_turn(messages))
+        with tracer().span("llm.complete", trace_id=current_trace_id()):
+            return self._response(self._pick_turn(messages))
 
     async def stream(
         self,
@@ -93,9 +95,10 @@ class MockProvider:
         tools: Sequence[ToolDef] = (),
         max_tokens: int = 4096,
     ) -> AsyncIterator[StreamEvent]:
-        turn = self._pick_turn(messages)
-        for i in range(0, len(turn.text), self._chunk_size):
-            yield TextDelta(turn.text[i : i + self._chunk_size])
-        for tc in turn.tool_calls:
-            yield ToolCallStarted(tc)
-        yield StreamDone(self._response(turn))
+        with tracer().span("llm.stream", trace_id=current_trace_id()):
+            turn = self._pick_turn(messages)
+            for i in range(0, len(turn.text), self._chunk_size):
+                yield TextDelta(turn.text[i : i + self._chunk_size])
+            for tc in turn.tool_calls:
+                yield ToolCallStarted(tc)
+            yield StreamDone(self._response(turn))

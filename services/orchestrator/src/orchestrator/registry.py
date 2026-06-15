@@ -9,7 +9,7 @@ from typing import Any
 from contracts import ToolSpec
 from contracts.loader import load_toolspecs
 from contracts.models import ErrorCode
-from llm import ToolDef
+from llm import ToolDef, Tracer, get_tracer
 
 from .permissions import DefaultPermissionChecker, PermissionChecker
 from .tool_context import ToolContext
@@ -55,9 +55,12 @@ class _Entry:
 
 
 class ToolRegistry:
-    def __init__(self, checker: PermissionChecker | None = None) -> None:
+    def __init__(
+        self, checker: PermissionChecker | None = None, *, tracer: Tracer | None = None
+    ) -> None:
         self._entries: dict[str, _Entry] = {}
         self._checker: PermissionChecker = checker or DefaultPermissionChecker()
+        self._tracer: Tracer = tracer or get_tracer()
 
     def register(
         self, spec: ToolSpec, handler: ToolHandler, *, resume: ResumeHandler | None = None
@@ -116,4 +119,6 @@ class ToolRegistry:
             raise ToolNotFoundError(name)
         # 红线 3:调用前二次校验 user_ctx 与 permission_scope,不通过抛 NoPermissionError。
         self._checker.check(ctx.user_ctx, entry.spec)
-        return await entry.handler(arguments, ctx)
+        # span 经 ctx.trace_id 串接(贯穿主 Agent / 子 Agent;红线 7:不记 raw 结果)。
+        with self._tracer.span(f"tool.{name}", trace_id=ctx.trace_id, tool=name):
+            return await entry.handler(arguments, ctx)

@@ -5,7 +5,7 @@ description = "资金计划 SaaS 智能助手 Agent —— monorepo 工作区根
 requires-python = ">=3.12"
 
 [tool.uv.workspace]
-members = ["packages/*", "services/*"]
+members = ["packages/*", "services/*", "evals"]
 
 [dependency-groups]
 dev = [
@@ -32,6 +32,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 known-first-party = [
     "common",
     "contracts",
+    "evalkit",
     "llm",
     "agent_gateway",
     "orchestrator",
@@ -64,6 +65,11 @@ ignore_missing_imports = true
 module = ["psycopg", "psycopg.*"]
 ignore_missing_imports = true
 
+# langfuse(LangfuseTracer 生产可观测后端,默认不安装,懒导入)—— 缺失导入豁免。
+[[tool.mypy.overrides]]
+module = ["langfuse", "langfuse.*"]
+ignore_missing_imports = true
+
 # tree-sitter 语言 grammar 包(C 扩展,未随包提供类型)—— 视为 Any。
 [[tool.mypy.overrides]]
 module = [
@@ -76,7 +82,7 @@ module = [
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["packages", "services"]
+testpaths = ["packages", "services", "evals/tests", "tests"]
 addopts = "-q --import-mode=importlib"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

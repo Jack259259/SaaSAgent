@@ -5,6 +5,7 @@
 > v0.2(2026-06-13):新增基础工具基线 13 件(§5)与 sandbox-svc / scheduler-svc;红线 4 范围澄清,新增红线 11–13。
 > v0.3(2026-06-13):技术栈落定(§4:Python 3.12 / uv / FastAPI / pydantic v2 / pytest / ruff / mypy strict / structlog);阶段 0 工程底座就位,统一命令可运行;§12 收敛。
 > v0.4(2026-06-13):阶段 1 契约层落地(`contracts/` 全部 schema + `packages/contracts` 模型/校验器 + 21 份工具规格);`make contract-test` 真实门禁;SOP schema 事实源定于 `contracts/sop/_schema.yaml`;ToolSpec 字段统一为 `timeout_ms`。
+> v0.5(2026-06-15):阶段 4–10 全部落地(sandbox/rag/data/code/sop/memory/scheduler/reflection 八服务 + 评估套件 `evals/`(evalkit + 5 集)+ 全链路 trace(`packages/llm/tracing.py`)+ `tests/security` 负例总套件);eval 达标阈值入 `evals/README.md`;CI 增 eval E=e2e + security 门禁;v0 验收见 `docs/acceptance-v0.md`;§12 收敛为生产接入项。
 
 ## 1. 项目概述
 
@@ -128,6 +129,14 @@ make sop-validate    # assets/sops schema 校验 + 静态交叉校验
 - `.claude/agents/`:`contract-reviewer`(契约与安全审查)、`asset-linter`(资产规范检查);
 - `.mcp.json`:接入 Langfuse 查询、评估 runner 等本地工具【待补】。
 
-## 12. 待补清单(当前阻塞项)
+## 12. 待补清单(v0 后,接入真实环境前的剩余项)
 
-`docs/glossary.md` 业务术语表;各服务 CLAUDE.md;evals 达标阈值;日志脱敏规范(`docs/security/logging.md`)。
+v0 为离线自洽闭环(全部 fixture/stub)。投产前的真实接入(均已留契约/适配位):
+
+1. **数据库对接**:data-svc 接只读库账号 + WrenAI(`WREN_API_URL` / `DB_DSN_READONLY`;PostgresExecutor / WrenAdapter 已留),并核对真实语义层 MDL(替换虚构 3 表)。
+2. **知识上传**:rag-svc 真实文档摄取与 LightRAG 后端(`LightRagStore` 已留);按租户/ACL 灌库。
+3. **代码仓放入**:code-svc 索引真实只读仓(`index_repos` 已就位),配置受控仓清单。
+4. **生产沙箱**:run_analysis 用 `ContainerRunner` 替换开发态 `SubprocessRunner`(强隔离落地)。
+5. **审批引擎对接**:escalate/notify/sop 写回对接真实工单与业务写 API(`HttpCaller` 已留)。
+
+文档待补(非阻塞):`docs/glossary.md`、各服务 CLAUDE.md、`docs/security/logging.md`。
