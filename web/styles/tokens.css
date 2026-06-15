@@ -1,0 +1,65 @@
+/* tokens.css — 设计令牌(色 / 间距 / 圆角 / 字号);明暗双主题 via html[data-theme]。
+   品牌强调色为自有占位(teal),不复制任何第三方品牌配色。初始 data-theme 由 index.html 预置脚本设定。 */
+
+:root {
+  /* 中性灰阶 */
+  --gray-50:#f8fafc;  --gray-100:#f1f5f9; --gray-200:#e2e8f0; --gray-300:#cbd5e1;
+  --gray-400:#94a3b8; --gray-500:#64748b; --gray-600:#475569; --gray-700:#334155;
+  --gray-800:#1e293b; --gray-900:#0f172a; --gray-950:#020617;
+
+  /* 单一品牌强调色(自有占位 · teal) */
+  --brand-400:#2dd4bf; --brand-500:#14b8a6; --brand-600:#0d9488; --brand-700:#0f766e;
+
+  /* 间距(4px 基) */
+  --space-1:.25rem; --space-2:.5rem;  --space-3:.75rem; --space-4:1rem;
+  --space-5:1.25rem; --space-6:1.5rem; --space-8:2rem;  --space-12:3rem;
+
+  /* 圆角 */
+  --radius-sm:.375rem; --radius-md:.625rem; --radius-lg:1rem; --radius-full:9999px;
+
+  /* 字号(模块化)与行高 */
+  --text-xs:.75rem; --text-sm:.875rem; --text-base:1rem; --text-lg:1.125rem;
+  --text-xl:1.375rem; --text-2xl:1.75rem;
+  --leading-tight:1.25; --leading-normal:1.6;
+
+  /* 字体族(自托管,见 vendor/README.md) */
+  --font-sans:'Inter', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono:'JetBrains Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+
+  /* 阴影 */
+  --shadow-sm:0 1px 2px rgba(2,6,23,.06);
+  --shadow-md:0 4px 16px rgba(2,6,23,.10);
+
+  /* 布局 */
+  --content-max:48rem;   /* ≈768px 主对话区最大宽 */
+  --sidebar-w:16rem;
+
+  /* ===== 语义令牌(light 默认) ===== */
+  --bg:var(--gray-50);
+  --bg-subtle:var(--gray-100);
+  --surface:#ffffff;
+  --surface-2:var(--gray-100);
+  --border:var(--gray-200);
+  --text:var(--gray-900);
+  --text-muted:var(--gray-500);
+  --accent:var(--brand-600);
+  --accent-hover:var(--brand-700);
+  --accent-contrast:#ffffff;
+  --danger:#dc2626;
+}
+
+/* ===== 暗色主题 ===== */
+html[data-theme="dark"] {
+  --bg:var(--gray-950);
+  --bg-subtle:var(--gray-900);
+  --surface:var(--gray-900);
+  --surface-2:var(--gray-800);
+  --border:var(--gray-800);
+  --text:var(--gray-100);
+  --text-muted:var(--gray-400);
+  --accent:var(--brand-400);
+  --accent-hover:var(--brand-500);
+  --accent-contrast:var(--gray-950);
+  --danger:#f87171;
+  --shadow-md:0 4px 16px rgba(0,0,0,.45);
+}

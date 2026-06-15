@@ -1,0 +1,72 @@
+/* app.css — reset + 基础排版 + 自托管字体;W0 仅含最简顶栏与占位主区,完整布局在 W1。 */
+
+/* 自托管字体(许可见 vendor/README.md:Inter / JetBrains Mono 均 SIL OFL 1.1) */
+@font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;
+  src:url('../vendor/fonts/inter/inter-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;
+  src:url('../vendor/fonts/inter/inter-latin-600-normal.woff2') format('woff2');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:700;font-display:swap;
+  src:url('../vendor/fonts/inter/inter-latin-700-normal.woff2') format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;
+  src:url('../vendor/fonts/jetbrains-mono/jetbrains-mono-latin-400-normal.woff2') format('woff2');}
+
+*,*::before,*::after{box-sizing:border-box;}
+html,body{margin:0;padding:0;min-height:100%;}
+body{
+  font-family:var(--font-sans);
+  font-size:var(--text-base);
+  line-height:var(--leading-normal);
+  color:var(--text);
+  background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  transition:background-color .2s ease, color .2s ease;
+}
+code,pre,kbd,samp{font-family:var(--font-mono);}
+button{font:inherit;color:inherit;cursor:pointer;}
+a{color:var(--accent);}
+[x-cloak]{display:none !important;}
+
+/* --- 顶栏(W0 最简;W1 扩展为完整 TopBar) --- */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:var(--space-3);
+  padding:var(--space-3) var(--space-5);
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.brand{display:flex;align-items:center;gap:var(--space-2);font-weight:700;letter-spacing:-.01em;}
+.brand .dot{color:var(--accent);line-height:1;}
+
+/* 图标按钮 */
+.icon-btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:2.25rem;height:2.25rem;
+  border:1px solid var(--border);border-radius:var(--radius-md);
+  background:var(--surface);color:var(--text-muted);
+  transition:background .15s, color .15s, border-color .15s;
+}
+.icon-btn:hover{background:var(--surface-2);color:var(--text);border-color:var(--gray-300);}
+.icon-btn svg{width:1.15rem;height:1.15rem;}
+
+/* 徽标 chip */
+.badge{
+  display:inline-block;padding:var(--space-1) var(--space-3);
+  border:1px solid var(--border);border-radius:var(--radius-full);
+  font-size:var(--text-xs);color:var(--text-muted);background:var(--surface);
+}
+
+/* --- W0 占位主区(W1 替换为对话布局) --- */
+.hello{
+  max-width:var(--content-max);
+  margin:0 auto;
+  padding:var(--space-12) var(--space-5);
+  text-align:center;
+}
+.hello h1{display:flex;align-items:center;justify-content:center;gap:var(--space-2);
+  font-size:var(--text-2xl);line-height:var(--leading-tight);margin:0 0 var(--space-3);}
+.hello p{color:var(--text-muted);margin:0 0 var(--space-4);}
+.accent-chip{
+  display:inline-block;width:.9rem;height:.9rem;border-radius:var(--radius-full);
+  background:var(--accent);
+}
