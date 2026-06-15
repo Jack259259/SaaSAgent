@@ -1,0 +1,5 @@
+# web/vendor — 自托管第三方库资产:按二进制原样保存,禁 EOL 归一化,
+# 保证与上游字节一致(SHA-256 见 README.md;否则 autocrlf 会令哈希在不同平台漂移)。
+*.min.js   binary
+*.min.css  binary
+*.woff2    binary
