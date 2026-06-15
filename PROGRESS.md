@@ -24,7 +24,7 @@
 > 验证不走 make:`web/mock/selftest.html` 全 PASS + 浏览器无 console 报错 + 该阶段手动验收清单逐项过。
 
 - [x] W0:内嵌脚手架与设计令牌(2026-06-16)—— DoD:`web/` 骨架(index.html + styles + js 占位 + vendor 自托管 + mock/selftest)就位;vendor(alpine/marked/highlight.js/dompurify/lucide/Inter/JetBrains Mono)自托管不引 CDN 且标注版本+许可+SHA-256;`selftest.html` 全 PASS;`python -m http.server` 打开页面正常、主题可切、无 console 报错;commit `feat(web): scaffold`。
-- [ ] W1:布局骨架 + 消息渲染 + 流式打字(对 mock)—— DoD:对标 Claude 布局/响应式/主题;markdown.js(marked+hljs+DOMPurify 消毒);消息块 + 流式 append + 普通滚动分页;selftest 加消毒/代码块/流式断言;commit `feat(web): layout + message render`。
+- [x] W1:布局骨架 + 消息渲染 + 流式打字(2026-06-16)—— DoD:对标 Claude 布局 + 响应式(断点 1024px,<1024 抽屉)+ 主题;markdown.js(marked+hljs+DOMPurify 严格消毒,<template> 惰性解析);用户/助手消息块 + 流式 append(本地 setInterval 模拟)+ 普通滚动不强拉;代码块语言标签 + 复制;selftest 16/0(消毒 script/onerror/javascript: + 代码块高亮 + 流式顺序);无头 Chromium 实测发消息→流式→代码块复制(真入剪贴板)→抽屉→主题切换,零 console/page 报错;commit `feat(web): layout + message render`。
 - [ ] W2:SSE 主循环 + 富事件卡片(对 mock-sse)—— DoD:sse.js(fetch+ReadableStream 解析 + Abort);顶部任务进展区 + 工具时间线(折叠分档)+ 消息内卡片(confirm/ask_user/citation);currentRun 投影;mock 多场景;selftest 扩展;commit `feat(web): sse loop + progress region + tool timeline + cards`。
 - [ ] W3:文件上传 + 会话历史 + 后端伺服与对接 —— DoD:上传子系统(双白名单/大小/拖拽/卡片)+ Repository(localStorage 会话 CRUD/恢复)+ agent-gateway 静态伺服与 SPA 回退 + 关 mock 接真实后端;`docs/acceptance-web-v0.md`;commit `feat(web): upload + history + serve + integrate`。
 - [ ] W4:Skill 管理模块(对 mock 开发)—— DoD:Sidebar 入口(角色门控)+ 列表/详情/编辑/删除/新建弹窗/上传 zip;skills.js API 客户端;mock-skills;selftest 扩展;后端待补写入 `docs/integration/backend-gaps.md`;commit `feat(web): skill management`。

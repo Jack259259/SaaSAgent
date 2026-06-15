@@ -5,43 +5,131 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>资金计划助手</title>
   <meta name="description" content="资金计划 SaaS 智能助手 · 内嵌前端(原生 + Alpine,零构建,同源同部署)">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%230d9488'/%3E%3C/svg%3E">
 
-  <!-- 主题预置:在首次绘制前读取本机偏好并设 data-theme,避免 FOUC(非业务逻辑) -->
+  <!-- 主题预置:首次绘制前读取本机偏好并设 data-theme,避免 FOUC(非业务逻辑) -->
   <script>
     (function () {
       try {
         var t = localStorage.getItem('fp_theme');
         if (!t) { t = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'; }
         document.documentElement.setAttribute('data-theme', t);
-      } catch (e) { /* file:// 等场景:保留 html 上的默认 light */ }
+      } catch (e) { /* file:// 等场景保留默认 light */ }
     })();
   </script>
 
   <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/app.css">
-  <!-- 代码高亮主题(W1 起使用) -->
   <link rel="stylesheet" href="vendor/highlight/github.min.css" id="hljs-theme">
+  <!-- 第三方库(UMD 全局,自托管不引 CDN;markdown.js 用 window.marked/hljs/DOMPurify) -->
+  <script src="vendor/marked/marked.min.js"></script>
+  <script src="vendor/highlight/highlight.min.js"></script>
+  <script src="vendor/dompurify/purify.min.js"></script>
 </head>
 <body x-data="app" x-cloak>
-  <header class="topbar">
-    <div class="brand">
-      <span class="dot">&#9679;</span>
-      <span>资金计划助手</span>
-      <span class="badge">内嵌 · 原生+Alpine</span>
+  <div class="app-shell">
+
+    <!-- ===== Sidebar ===== -->
+    <aside class="sidebar" :class="{ open: sidebarOpen }" aria-label="会话与导航">
+      <div class="sidebar-head">
+        <button class="new-btn" type="button" @click="newConversation()">
+          <span class="i" x-html="icon('plus')"></span>新建对话
+        </button>
+      </div>
+      <nav class="conv-list" aria-label="历史会话">
+        <div class="conv-group">今天</div>
+        <button class="conv-item is-active" type="button" x-text="conversationTitle"></button>
+        <p class="conv-hint">会话历史将在 W3 接入(localStorage)。</p>
+      </nav>
+      <div class="sidebar-foot">
+        <button class="side-link" type="button">Skill 管理<span class="soon">W4</span></button>
+        <button class="side-link" type="button">用户 / 设置</button>
+      </div>
+    </aside>
+    <div class="backdrop" x-show="sidebarOpen" @click="sidebarOpen = false" x-transition.opacity></div>
+
+    <!-- ===== Main ===== -->
+    <div class="main-col">
+      <header class="topbar">
+        <button class="icon-btn hamburger" type="button" @click="sidebarOpen = !sidebarOpen"
+                aria-label="打开 / 关闭侧栏" x-html="icon('menu')"></button>
+        <div class="topbar-title" x-text="conversationTitle"></div>
+        <div class="topbar-actions">
+          <button class="icon-btn" type="button" @click="toggleTheme()"
+                  :aria-label="theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题'"
+                  :title="theme === 'dark' ? '切换到亮色' : '切换到暗色'"
+                  x-html="theme === 'dark' ? icon('sun') : icon('moon')"></button>
+          <button class="icon-btn" type="button" aria-label="用户菜单" title="用户菜单(占位)"
+                  x-html="icon('user')"></button>
+        </div>
+      </header>
+
+      <main class="chat" :class="{ 'is-empty': !hasMessages }">
+        <!-- 顶部任务进展区插槽(W2) -->
+
+        <!-- 空状态:欢迎区 + 居中输入框 -->
+        <section class="welcome" x-show="!hasMessages">
+          <h1 class="welcome-title">资金计划助手</h1>
+          <p class="welcome-sub">问我资金计划、取数、知识检索或页面操作。</p>
+          <form class="composer" @submit.prevent="sendMessage()">
+            <button class="icon-btn attach" type="button" disabled title="附件(W3)" aria-label="添加附件"
+                    x-html="icon('paperclip')"></button>
+            <textarea class="composer-input" rows="1" x-model="draft"
+                      placeholder="给资金计划助手发消息…(Enter 发送,Shift+Enter 换行)"
+                      @keydown="onComposerKeydown($event)" @input="autogrow($event)" aria-label="消息输入"></textarea>
+            <button class="send-btn" type="submit" :disabled="!canSend()" aria-label="发送"
+                    x-html="icon('arrow-up')"></button>
+          </form>
+        </section>
+
+        <!-- 会话区 -->
+        <div class="scroller" x-ref="scroller" @scroll="onScroll($event)" x-show="hasMessages">
+          <div class="messages" aria-live="polite">
+            <template x-for="m in messages" :key="m.id">
+              <article class="msg" :class="'msg-' + m.role">
+                <div class="msg-inner">
+                  <!-- 助手:富卡片插槽(W2 填充 m.cards) -->
+                  <div class="card-slot" x-show="m.role === 'assistant' && (m.cards || []).length"></div>
+
+                  <!-- 用户:纯文本(保留换行) -->
+                  <div class="msg-body user-body" x-show="m.role === 'user'" x-text="m.raw"></div>
+
+                  <!-- 助手:流式纯文本 → 完成转 Markdown -->
+                  <div class="msg-body assistant-body" x-show="m.role === 'assistant'" @click="onBodyClick($event)">
+                    <span class="stream-text" x-show="m.streaming" x-text="m.streamText"></span><span
+                      class="cursor" x-show="m.streaming" aria-hidden="true"></span>
+                    <div class="md" x-show="!m.streaming" x-html="m.html"></div>
+                  </div>
+                </div>
+              </article>
+            </template>
+          </div>
+        </div>
+      </main>
+
+      <!-- 底部 Composer(发首条后落底) -->
+      <div class="composer-bar" x-show="hasMessages">
+        <form class="composer" @submit.prevent="sendMessage()">
+          <button class="icon-btn attach" type="button" disabled title="附件(W3)" aria-label="添加附件"
+                  x-html="icon('paperclip')"></button>
+          <textarea class="composer-input" rows="1" x-model="draft"
+                    placeholder="给资金计划助手发消息…"
+                    @keydown="onComposerKeydown($event)" @input="autogrow($event)" aria-label="消息输入"></textarea>
+          <button class="send-btn" type="button"
+                  @click="sendStatus === 'streaming' ? stopStream() : sendMessage()"
+                  :disabled="sendStatus !== 'streaming' && !canSend()"
+                  :class="{ 'is-stop': sendStatus === 'streaming' }"
+                  :aria-label="sendStatus === 'streaming' ? '停止' : '发送'">
+            <span x-show="sendStatus !== 'streaming'" x-html="icon('arrow-up')"></span>
+            <span x-show="sendStatus === 'streaming'" class="stop-sq" aria-hidden="true"></span>
+          </button>
+        </form>
+      </div>
+
     </div>
-    <button class="icon-btn" type="button" @click="toggleTheme()"
-            :aria-label="theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题'"
-            :title="theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题'"
-            x-html="theme === 'dark' ? icon('sun') : icon('moon')"></button>
-  </header>
+  </div>
 
-  <main class="hello">
-    <h1><span class="accent-chip"></span> Hello,脚手架已就位</h1>
-    <p>当前主题:<strong x-text="theme"></strong> · Alpine <span x-text="alpineOk ? '已生效 ✓' : '未生效'"></span></p>
-    <p><span class="badge" x-text="mockNote"></span></p>
-  </main>
-
-  <!-- 顺序要紧:app.js(module)先执行并注册 alpine:init,再加载 Alpine(defer,文档顺序在后)。 -->
+  <!-- 顺序要紧:app.js(module)先注册 alpine:init,再加载 Alpine(defer,文档顺序在后)。 -->
   <script type="module" src="js/app.js"></script>
   <script defer src="vendor/alpine/alpine.min.js"></script>
 </body>

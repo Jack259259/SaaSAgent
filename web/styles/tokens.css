@@ -46,6 +46,10 @@
   --accent-hover:var(--brand-700);
   --accent-contrast:#ffffff;
   --danger:#dc2626;
+
+  /* W1 消息 / 流式 */
+  --bubble-user:var(--surface-2);
+  --cursor:var(--accent);
 }
 
 /* ===== 暗色主题 ===== */

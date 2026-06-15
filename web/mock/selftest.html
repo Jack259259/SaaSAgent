@@ -4,8 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>selftest · web 前端自检</title>
-  <!-- 载入设计令牌,以便断言 CSS 变量存在 -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%230d9488'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="../styles/tokens.css">
+  <!-- 第三方库(UMD 全局),供 renderMarkdown 断言使用 -->
+  <script src="../vendor/marked/marked.min.js"></script>
+  <script src="../vendor/highlight/highlight.min.js"></script>
+  <script src="../vendor/dompurify/purify.min.js"></script>
   <style>
     body{font-family:var(--font-sans, system-ui);margin:0;padding:1.5rem;background:var(--bg,#fff);color:var(--text,#111);}
     h1{font-size:1rem;color:var(--text-muted,#666);margin:0 0 1rem;font-weight:600;}
@@ -26,6 +30,8 @@
 
   <script type="module">
     import { installMockSSE, parseSSE } from './mock-sse.js';
+    import { renderMarkdown } from '../js/markdown.js';
+    import { appendToken } from '../js/chat.js';
 
     const results = [];
     const assert = (name, cond) => results.push({ name, ok: !!cond });
@@ -34,12 +40,11 @@
       catch (e) { results.push({ name, ok: false, err: String(e) }); }
     }
 
-    // 1) 设计令牌存在
+    // ===== W0:令牌 + SSE 解析 + mock =====
     const cs = getComputedStyle(document.documentElement);
     assert('tokens: --accent 已定义', cs.getPropertyValue('--accent').trim().length > 0);
     assert('tokens: --space-1 已定义', cs.getPropertyValue('--space-1').trim().length > 0);
 
-    // 2) parseSSE 纯函数:answer_delta×3 + done
     const canned =
       'event: answer_delta\ndata: {"text":"a"}\n\n' +
       'event: answer_delta\ndata: {"text":"b"}\n\n' +
@@ -51,7 +56,6 @@
     assert('parseSSE: 末事件为 done', !!parsed[3] && parsed[3].event === 'done');
     assert('parseSSE: 首事件 data.text === "a"', !!parsed[0] && parsed[0].data && parsed[0].data.text === 'a');
 
-    // 3) mock 端到端:拦截 POST /chat 返回 text/event-stream,且为 3×answer_delta + done
     try { localStorage.setItem('fp_mock', '1'); } catch (e) { /* ignore */ }
     installMockSSE();
     await assertAsync('mock: POST /chat 被拦截且为 event-stream', async () => {
@@ -67,7 +71,23 @@
       return res.ok;
     });
 
-    // 渲染结果
+    // ===== W1:Markdown 消毒 / 渲染 / 流式 append =====
+    // 注意:脚本闭合标签在内联 script 里必须转义为 <\/script>,否则 HTML 解析器会提前闭合本块。
+    assert('md: script 标签被清除', !renderMarkdown('<script>alert(1)<\/script>').includes('<script'));
+    assert('md: onerror 事件属性被清除', !/onerror/i.test(renderMarkdown('<img src=x onerror=alert(1)>')));
+    assert('md: javascript: URL 被清除', !/javascript:/i.test(renderMarkdown('[x](javascript:alert(1))')));
+    assert('md: **bold** → <strong>', renderMarkdown('**hi**').includes('<strong>hi</strong>'));
+
+    const cb = renderMarkdown('```python\nprint(1)\n```');
+    assert('md: 代码块含 code-block + copy-btn', cb.includes('code-block') && cb.includes('copy-btn'));
+    assert('md: 代码块经 hljs 高亮', cb.includes('hljs'));
+    assert('md: 代码块标注语言 python', cb.includes('python'));
+
+    const sm = { raw: '', streamText: '' };
+    appendToken(sm, 'a'); appendToken(sm, 'b1'); appendToken(sm, 'c');
+    assert('stream: append 顺序正确(ab1c)', sm.streamText === 'ab1c' && sm.raw === 'ab1c');
+
+    // ===== 渲染结果 =====
     const passed = results.filter((r) => r.ok).length;
     const failed = results.length - passed;
     const sum = document.getElementById('summary');
@@ -81,7 +101,7 @@
       if (r.err) { const s = document.createElement('span'); s.className = 'err'; s.textContent = ' — ' + r.err; li.appendChild(s); }
       ul.appendChild(li);
     }
-    window.__selftest = { passed, failed, results }; // 供脚本化检查读取
+    window.__selftest = { passed, failed, results };
   </script>
 </body>
 </html>
