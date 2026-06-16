@@ -38,22 +38,33 @@ class AnthropicProvider:
         self,
         *,
         model: str | None = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
         retry: RetryConfig | None = None,
         cache_system: bool = True,
     ) -> None:
-        self._api_key = os.environ.get("LLM_API_KEY") or None
+        self._api_key = api_key or os.environ.get("LLM_API_KEY") or None
         self._model = model or os.environ.get("LLM_MODEL") or _DEFAULT_MODEL
+        self._base_url = (
+            base_url
+            or os.environ.get("LLM_BASE_URL")
+            or os.environ.get("ANTHROPIC_BASE_URL")
+            or None
+        )
         self._retry = retry or RetryConfig()
         self._cache_system = cache_system
         self._client: Any = None  # lazy
 
     def _ensure_client(self) -> Any:
         if not self._api_key:
-            raise NotConfiguredError("LLM_API_KEY 未配置")
+            raise NotConfiguredError("LLM api_key 未配置(config/llm.yml 或 LLM_API_KEY)")
         if self._client is None:
             import anthropic  # lazy:仅在真正调用时依赖 SDK
 
-            self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
+            kwargs: dict[str, Any] = {"api_key": self._api_key}
+            if self._base_url:
+                kwargs["base_url"] = self._base_url
+            self._client = anthropic.AsyncAnthropic(**kwargs)
         return self._client
 
     def _system_param(self, system: str) -> list[dict[str, Any]]:

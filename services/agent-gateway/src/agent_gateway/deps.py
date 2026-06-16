@@ -36,6 +36,8 @@ from scheduler_svc import (
 )
 from sop_executor import SopService
 
+from .config import load_llm_config
+
 # 进程内会话存储单例(阶段 3 内存版;支撑跨请求暂停/恢复)。
 _SESSION_STORE = SessionStore()
 # 分层记忆服务单例(阶段 9a 内存版;按 tenant+user 隔离)+ 启动构建的 Skill 索引。
@@ -54,24 +56,25 @@ _CODE_INDEX_DB = Path("data/code-index/symbols.db")
 
 
 def get_provider() -> Provider:
-    """生产默认:AnthropicProvider(未配置 LLM_API_KEY 时调用即 NOT_CONFIGURED)。
+    """按 config/llm.yml(路径可经 FP_LLM_CONFIG 覆盖)构造 Provider;缺字段回退同名环境变量。
 
-    FP_DEV_STUB=1:返回离线开发桩(MockProvider 固定作答),供内嵌前端 W3 同源对接演示
-    (`make dev` 无需 LLM_API_KEY 即产出真实 answer_delta+done 轮次)。
+    dev_stub=true(或 FP_DEV_STUB=1)→ 离线开发桩 MockProvider(无需 api_key);
+    否则 → AnthropicProvider(model / api_key / base_url 来自配置)。
     """
-    if os.environ.get("FP_DEV_STUB") == "1":
+    cfg = load_llm_config()
+    if cfg.dev_stub:
         return MockProvider(
             [
                 ScriptedTurn(
                     text=(
-                        "你好,这是来自真实 agent-gateway(开发桩 provider,FP_DEV_STUB)的回答。"
+                        "你好,这是来自真实 agent-gateway(开发桩 provider,dev_stub)的回答。"
                         "前端经同源 /chat 直连,SSE 字段对齐 docs/dev/sse-protocol.md。"
                     ),
                     stop_reason="end_turn",
                 )
             ]
         )
-    return AnthropicProvider()
+    return AnthropicProvider(model=cfg.model, api_key=cfg.api_key, base_url=cfg.base_url)
 
 
 def _data_service() -> DataService:

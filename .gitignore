@@ -15,6 +15,8 @@ build/
 .env
 .env.*
 !.env.example
+config/llm.yml
+!config/llm.yml.example
 
 # ---- IDE / 本地配置 ----
 .idea/

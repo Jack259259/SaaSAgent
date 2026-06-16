@@ -15,6 +15,26 @@ FP_DEV_STUB=1 make dev
 - 前端通过探测 `/healthz` 发现真实后端 → **自动关闭 mock**,直连真实 `/chat`(`mock-sse.js`)。
 - 身份:开发态前端注入 `X-User-Ctx`(§12-D4);生产应由网关验短时令牌签发 user_ctx(`auth.py` 已标 TODO)。
 
+## 大模型(LLM)配置(config/llm.yml)
+
+LLM 的 **url / api_key / model** 集中在 `config/llm.yml`(由 agent-gateway `get_provider` 读取;路径可经 `FP_LLM_CONFIG` 覆盖)。**密钥不入库**:仓内只提交模板 `config/llm.yml.example`,真实 `config/llm.yml` 已 gitignore。
+
+```bash
+cp config/llm.yml.example config/llm.yml   # 然后填入真实值
+make dev                                    # 浏览器 http://127.0.0.1:8080/
+```
+
+| 字段 | 作用 | 默认 / 回退 |
+|---|---|---|
+| `url` | API 链接(base URL);留空 = 官方端点 | 环境 `LLM_BASE_URL` → `ANTHROPIC_BASE_URL` |
+| `api_key` | API Key(调真实模型必填) | 环境 `LLM_API_KEY` |
+| `model` | 模型 id | `claude-opus-4-8`(环境 `LLM_MODEL`) |
+| `dev_stub` | `true` = 离线开发桩(无需 key) | 环境 `FP_DEV_STUB=1` |
+
+- 值支持 `${ENV_VAR}` 插值(如 `api_key: "${LLM_API_KEY}"` 让密钥走环境/密管)。
+- 缺文件或缺字段 → 回退同名环境变量(向后兼容);故 `FP_DEV_STUB=1 make dev` 仍可用。
+- 验证:`curl -s -X POST http://127.0.0.1:8080/chat -H 'Content-Type: application/json' -H 'X-User-Ctx: {"tenant_id":"t1","user_id":"u1","roles":["analyst"],"data_scope":{},"permissions":["*"]}' -d '{"message":"你好"}'` 见到 `event: answer_delta` 即通。
+
 ## 纯前端 mock 开发(无后端)
 
 ```bash
