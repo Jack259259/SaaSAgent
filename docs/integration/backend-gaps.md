@@ -29,6 +29,24 @@
 
 - 生产应由网关验证短时令牌并服务端构造 `user_ctx`(`agent_gateway/auth.py` 已标 TODO),前端不再注入 `X-User-Ctx`,改走同源 cookie/session。
 
-## E. Skill 管理(W4 预告)
+## E. Skill 管理(W4 前端已实现,以下后端待补)
 
-- `GET / POST / PUT / DELETE /skills`、`POST /skills/{id}/status`、`POST /skills/upload`(安全解压:zip slip / 解压炸弹 / 结构白名单 / SKILL.md schema 校验 / 草稿态)—— W4 阶段细化补充本节。
+前端「Skill 管理」(`web/js/skills.js` + `web/mock/mock-skills.js`)已对 mock 联调完成;**真实后端需新增以下端点,均需管理员/内部角色鉴权**(§9.1 角色矩阵;非授权 403)。前端入口已按 user_ctx 角色门控(`canManageSkills`),写操作经统一 http 透传 `X-User-Ctx`。
+
+API(对齐设计 §8.5.4):
+- `GET    /skills` → `[{ id, name, description, status(active|draft|review), updated_at }]`
+- `GET    /skills/{id}` → `{ id, name, description, content(SKILL.md), status, ... }`
+- `POST   /skills` (name, content) → 创建;**入草稿**(status=draft,D5);SKILL.md schema 校验失败返回 **422 + `{ errors:[...] }`**(前端在表单内逐条展示,不静默)
+- `PUT    /skills/{id}` (name, content) → 更新;回草稿待审
+- `DELETE /skills/{id}` → 删除
+- `POST   /skills/{id}/status` (status: active|draft) → 状态变更(发布生效;仅管理员)
+- `POST   /skills/upload` (multipart .zip) → 逐条解压入库结果 `{ results:[{ name, ok, status?, reason? }] }`
+
+**`/skills/upload` 安全要求(前端无法保证,必须后端做,红线 7/10)**:
+- **zip slip 路径穿越防护**:拒绝 `../` 等逃逸路径,解压目标必须落在隔离目录内。
+- **解压炸弹防护**:限制解压后总大小与文件数(建议 **50MB / 500 文件**),超限即拒。
+- **结构白名单**:每个 Skill 为一目录,`SKILL.md` 必需 + 可选 `scripts/`、`resources/`;其余结构拒绝。
+- **SKILL.md schema 校验**:frontmatter(name/description 等)+ 正文规范。
+- **入库策略按 D5**:落**草稿态**(draft),经审核转 active;不让任意上传即时生效(Skill 正文进 LLM 上下文,是提示注入面)。
+
+**治理(后端红线 10)**:`assets/skills/` 的任何改动必须过 schema 校验 + 对应评估回归 + git 版本化与评审后方可合并;写 API 应落入此治理流(草稿 → 审核 → 生效),而非直接改生效库。

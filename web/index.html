@@ -59,7 +59,7 @@
         <p class="conv-hint" x-show="!conversations.length">还没有历史会话(本机 localStorage)。</p>
       </nav>
       <div class="sidebar-foot">
-        <button class="side-link" type="button">Skill 管理<span class="soon">W4</span></button>
+        <button class="side-link" type="button" x-show="skillAdmin()" @click="openSkills()">Skill 管理</button>
         <button class="side-link" type="button" @click="clearHistory()">清除本地历史</button>
         <button class="side-link" type="button">用户 / 设置</button>
       </div>
@@ -330,6 +330,106 @@
         </form>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ===== Skill 管理 overlay(W4)===== -->
+  <div class="skills-overlay" x-show="skillsOpen" x-transition.opacity @keydown.escape.window="skillsOpen && closeSkills()">
+    <div class="skills-panel">
+      <div class="skills-header">
+        <h2 class="skills-title">Skill 管理</h2>
+        <div class="skills-header-actions">
+          <button class="btn primary" type="button" @click="startNew()">新建 Skill</button>
+          <button class="btn" type="button" @click="$refs.skillZip.click()">上传 Skill 包</button>
+          <button class="icon-btn" type="button" @click="closeSkills()" aria-label="关闭" x-html="icon('x')"></button>
+        </div>
+      </div>
+      <input type="file" accept=".zip" class="file-input-hidden" x-ref="skillZip" @change="pickSkillZip($event)">
+      <div class="skills-body">
+
+        <!-- 列表 -->
+        <template x-if="skillView === 'list'">
+          <div class="skills-list">
+            <div class="skill-state" x-show="skillsLoading">加载中…</div>
+            <div class="skill-state skills-err" x-show="skillsError" x-text="skillsError"></div>
+            <div class="skill-state" x-show="!skillsLoading && !skillsError && !skillsList.length">暂无 Skill。点击「新建 Skill」或「上传 Skill 包」。</div>
+            <div class="upload-results" x-show="skillUploadError || skillUploadResults">
+              <div class="skills-err" x-show="skillUploadError" x-text="skillUploadError"></div>
+              <template x-if="skillUploadResults">
+                <div>
+                  <div class="upload-results-title">上传结果(后端解压入库,逐条):</div>
+                  <ul>
+                    <template x-for="(r, ri) in skillUploadResults" :key="ri">
+                      <li :class="r.ok ? 'ok' : 'bad'"><span x-text="r.ok ? '✓' : '✗'"></span> <span x-text="r.name"></span><span x-show="!r.ok" x-text="' — ' + (r.reason || '')"></span></li>
+                    </template>
+                  </ul>
+                </div>
+              </template>
+            </div>
+            <template x-for="s in skillsList" :key="s.id">
+              <div class="skill-card" @click="viewSkill(s.id)">
+                <div class="skill-card-main">
+                  <div class="skill-name" x-text="s.name"></div>
+                  <div class="skill-desc" x-text="s.description"></div>
+                </div>
+                <span class="skill-status" :class="'ss-' + s.status" x-text="statusLabel(s.status)"></span>
+                <span class="skill-updated" x-text="skillFmtTime(s.updated_at)"></span>
+                <button class="conv-op skill-del" type="button" @click.stop="removeSkill(s.id)" title="删除" aria-label="删除" x-html="icon('trash')"></button>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- 详情 -->
+        <template x-if="skillView === 'detail' && skillCurrent">
+          <div class="skill-detail">
+            <button class="link-btn" type="button" @click="skillView = 'list'">← 返回列表</button>
+            <div class="skill-detail-head">
+              <h3 x-text="skillCurrent.name"></h3>
+              <span class="skill-status" :class="'ss-' + skillCurrent.status" x-text="statusLabel(skillCurrent.status)"></span>
+            </div>
+            <div class="skill-meta" x-text="skillCurrent.description"></div>
+            <div class="skill-actions">
+              <button class="btn" type="button" @click="startEdit()">编辑</button>
+              <button class="btn primary" type="button" x-show="skillCurrent.status !== 'active'" @click="publishSkill()">发布生效</button>
+              <button class="btn" type="button" @click="removeSkill(skillCurrent.id)">删除</button>
+            </div>
+            <div class="md skill-content" x-html="skillContentHtml()"></div>
+          </div>
+        </template>
+
+        <!-- 新建 / 编辑 -->
+        <template x-if="skillView === 'edit' || skillView === 'new'">
+          <div class="skill-form">
+            <button class="link-btn" type="button" @click="cancelEdit()">← 取消</button>
+            <h3 x-text="skillView === 'new' ? '新建 Skill' : '编辑 Skill'"></h3>
+            <label class="form-field">
+              <span>名称</span>
+              <input class="form-input" type="text" x-model="skillForm.name" @input="skillFormError = ''" placeholder="字母 / 数字 / _ / -,2–64 字符">
+            </label>
+            <div class="form-err" x-show="skillFormError" x-text="skillFormError"></div>
+            <div class="skill-edit-grid">
+              <label class="skill-edit-col">
+                <span>SKILL.md</span>
+                <textarea class="form-textarea" x-model="skillForm.content" spellcheck="false"></textarea>
+              </label>
+              <div class="skill-edit-col">
+                <span class="preview-label">实时预览(已消毒)</span>
+                <div class="md skill-preview" x-html="skillPreviewHtml()"></div>
+              </div>
+            </div>
+            <div class="schema-errs" x-show="skillSchemaErrors.length">
+              <div class="schema-errs-title">后端 schema 校验未过:</div>
+              <ul><template x-for="(e, ei) in skillSchemaErrors" :key="ei"><li x-text="e"></li></template></ul>
+            </div>
+            <div class="skill-form-actions">
+              <button class="btn primary" type="button" :disabled="skillSaving" @click="submitSkill()">提交</button>
+              <span class="save-hint" x-show="skillSaveHint" x-text="skillSaveHint"></span>
+            </div>
+          </div>
+        </template>
+
+      </div>
     </div>
   </div>
 

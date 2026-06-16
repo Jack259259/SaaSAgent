@@ -2,6 +2,7 @@
 // 包裹 window.fetch:拦截 POST /chat 与 POST /chat/confirm,按场景返回预设 SSE 序列;非这两者一律透传。
 // 帧格式事实来源:docs/dev/sse-protocol.md。confirm_request/ask_user 后本段结束(无 done),用 X-Session-Id 续传。
 // W3 关闭(localStorage fp_mock='0')后相对路径直连真实后端,前端零改动。
+import { handleSkills } from './mock-skills.js';
 
 /** 显式开关:?mock=1 / localStorage fp_mock='1' 强开;'0' 强关;未显式返回 null(由 /healthz 探测决定)。 */
 export function mockForced() {
@@ -249,6 +250,8 @@ export async function installMockSSE() {
       return path === '/chat' ? handleChat(body, signal) : handleConfirm(body, signal);
     }
     if (method === 'POST' && path === '/files') return handleFiles(init.body);
+    const sk = handleSkills(method, path, init); // /skills*(W4 Skill 管理)
+    if (sk) return sk;
     return original(input, init);
   };
 

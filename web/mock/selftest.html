@@ -36,6 +36,7 @@
     import { postChatStream, buildChatBody, buildConfirmBody, buildAskBody } from '../js/sse.js';
     import { validateFile, fileExt, humanSize, ATTACH_LIMITS } from '../js/attachments.js';
     import { createConversationStore, groupByTime } from '../js/store.js';
+    import { canManageSkills, validateSkillName, validateSkillZip, splitFrontmatter, SKILL_ZIP_LIMITS, listSkills, createSkill, setSkillStatus, uploadSkillZip } from '../js/skills.js';
 
     const results = [];
     const assert = (name, cond) => results.push({ name, ok: !!cond });
@@ -177,6 +178,22 @@
 
     assert('chat: payload 携带 attachments', (() => { const b = buildChatBody('hi', ['f1', 'f2']); return Array.isArray(b.attachments) && b.attachments.length === 2 && b.message === 'hi'; })());
     assert('chat: 无附件不带 attachments 字段', buildChatBody('hi').attachments === undefined);
+
+    // ===== W4:Skill 管理(角色门控 + 校验 + API)=====
+    assert('skill: canManageSkills 角色门控', canManageSkills(['analyst']) === false && canManageSkills(['skill_admin']) === true);
+    assert('skill: name 校验(空/非法/合法)', validateSkillName('').ok === false && validateSkillName('a b').ok === false && validateSkillName('fund_helper-1').ok === true);
+    assert('skill: zip 类型校验', validateSkillZip({ name: 'a.txt', size: 10 }).ok === false && validateSkillZip({ name: 'a.zip', size: 10 }).ok === true);
+    assert('skill: zip 超大小拒', validateSkillZip({ name: 'a.zip', size: SKILL_ZIP_LIMITS.maxBytes + 1 }).ok === false);
+    assert('skill: SKILL.md 预览消毒(script 清除)', !renderMarkdown(splitFrontmatter('---\nname: x\n---\n<img src=q onerror=alert(1)><script>x<\/script>').body).includes('<script'));
+    const sfm = splitFrontmatter('---\nname: demo\ndescription: d\n---\n# body\ntext');
+    assert('skill: splitFrontmatter(meta+body)', sfm.meta.name === 'demo' && sfm.meta.description === 'd' && /# body/.test(sfm.body));
+
+    await assertAsync('skill api: list 返回数组', async () => Array.isArray(await listSkills()));
+    await assertAsync('skill api: create 合法→draft', async () => { const c = await createSkill('selftest_skill', '---\nname: selftest_skill\ndescription: d\n---\n# x'); return c.status === 'draft' && c.name === 'selftest_skill'; });
+    await assertAsync('skill api: create 非法→422+errors', async () => { try { await createSkill('bad', '没有 frontmatter'); return false; } catch (e) { return e.status === 422 && Array.isArray(e.data.errors) && e.data.errors.length > 0; } });
+    await assertAsync('skill api: status→active', async () => { const l = await listSkills(); const d = l.find((s) => s.status === 'draft'); if (!d) return false; const r = await setSkillStatus(d.id, 'active'); return r.status === 'active'; });
+    await assertAsync('skill api: upload 多条结果(成功+拒绝)', async () => { const r = await uploadSkillZip(new File(['x'], 'pack.zip', { type: 'application/zip' })); return Array.isArray(r.results) && r.results.length >= 2 && r.results.some((x) => x.ok) && r.results.some((x) => !x.ok); });
+    await assertAsync('skill api: upload 非法 zip→400', async () => { try { await uploadSkillZip(new File(['x'], 'invalid.zip', { type: 'application/zip' })); return false; } catch (e) { return e.status === 400; } });
 
     // ===== 渲染结果 =====
     const passed = results.filter((r) => r.ok).length;
