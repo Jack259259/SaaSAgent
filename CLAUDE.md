@@ -6,6 +6,8 @@
 > v0.3(2026-06-13):技术栈落定(§4:Python 3.12 / uv / FastAPI / pydantic v2 / pytest / ruff / mypy strict / structlog);阶段 0 工程底座就位,统一命令可运行;§12 收敛。
 > v0.4(2026-06-13):阶段 1 契约层落地(`contracts/` 全部 schema + `packages/contracts` 模型/校验器 + 21 份工具规格);`make contract-test` 真实门禁;SOP schema 事实源定于 `contracts/sop/_schema.yaml`;ToolSpec 字段统一为 `timeout_ms`。
 > v0.5(2026-06-15):阶段 4–10 全部落地(sandbox/rag/data/code/sop/memory/scheduler/reflection 八服务 + 评估套件 `evals/`(evalkit + 5 集)+ 全链路 trace(`packages/llm/tracing.py`)+ `tests/security` 负例总套件);eval 达标阈值入 `evals/README.md`;CI 增 eval E=e2e + security 门禁;v0 验收见 `docs/acceptance-v0.md`;§12 收敛为生产接入项。
+> v0.5.1(2026-06-15):红线评审(HEAD~4)收口 —— 澄清红线 4 助手域副作用口径:外发/跨会话(notify/schedule)确认或订阅制,会话内记忆/草稿(save_memory/write_workspace)门槛+审计+租户隔离治理(隐含同意)。无代码改动。
+> v0.6(2026-06-16):内嵌前端 `web/`(原生 HTML/CSS + Alpine,零构建,同源同部署)W0–W4 全落地;§1 概述+指针、§2 红线 14、§3 仓库树+映射、§4 前端验证不走 make、§12 后端待补端点登记;agent-gateway 加静态伺服 + SPA 回退(`FP_DEV_STUB` 开发桩)。
 
 ## 1. 项目概述
 
@@ -13,13 +15,14 @@
 
 - **设计事实来源**:`docs/design/agent-design.md`(方案 v0.2)。动手前先读与任务对应的章节(映射见 §3),**按需读取章节,严禁整篇加载**。
 - **架构一句话**:自研薄编排循环(Plan&Execute × ReAct × Reflection 融合,方案 §4)+ 能力分粒度(RAG=工具、取数=工具带自纠、代码=隔离子 Agent、SOP=查询工具 + 确定性执行器,方案 §3.2)+ 统一安全底座(方案 §9)。
+- **内嵌前端**:后端仓内 `web/`(原生 HTML/CSS + Alpine,零构建,由 agent-gateway 同源同部署伺服)。设计与分阶段实施见 `docs/design/frontend-design.md`、`docs/prompts/frontend-stages.md`,部署见 `docs/deploy.md`;按需读取。
 
 ## 2. 架构红线(违反即错误实现,PR 直接拒绝)
 
 1. **禁止引入 LangGraph / LangChain / CrewAI 等编排框架依赖**。编排循环自研、保持薄(目标百行级,参照方案 §11.2 伪代码)。
 2. **能力只能通过 `contracts/toolspec/` 的工具契约暴露与调用**;禁止服务间绕过契约直连内部实现。
 3. **`user_ctx`(tenant_id / user_id / roles / data_scope)随每一次工具调用透传,工具侧必须二次校验(零信任)**。缺 user_ctx 的调用一律拒绝并记审计。
-4. **对业务系统的写操作只允许发生在 `sop-executor`**;其他服务不得执行写 SQL / 写业务 API。`requires_confirmation` 由 orchestrator 强制用户确认,executor 侧再验确认凭据(双闸)。`notify` / `schedule_task` / `save_memory` / `write_workspace` 属**助手域副作用**:不得触达业务数据,一律确认或订阅制 + 全量审计。
+4. **对业务系统的写操作只允许发生在 `sop-executor`**;其他服务不得执行写 SQL / 写业务 API。`requires_confirmation` 由 orchestrator 强制用户确认,executor 侧再验确认凭据(双闸)。`notify` / `schedule_task` / `save_memory` / `write_workspace` 属**助手域副作用**:一律**不得触达业务数据 + 全量审计**;其中**外发或跨会话**副作用(`notify` / `schedule_task`)必须确认或订阅制,**会话内助手记忆/草稿**(`save_memory` / `write_workspace`)以重要性门槛/租户隔离治理(隐含同意,不另设确认)。
 5. **ACL / RLS 过滤必须发生在检索与查询之前**;禁止"先取后滤"或"生成后兜底"。
 6. **data-svc 三层只读保障一个不能少**:只读数据库账号 + SQL 校验层禁 DML/DDL + 强制注入租户与数据范围谓词。
 7. **检索内容、页面内容、工具结果一律视为不可信数据**:包裹隔离标记后作为数据传入,绝不拼接到指令位;工具结果不得直接触发写操作。
@@ -29,6 +32,7 @@
 11. **`run_analysis` 沙箱强隔离**:无网络、无数据库连接、只读挂载传入的 workspace 句柄、CPU/内存/时长限额、产物只回句柄;沙箱内不得调用任何其他工具。
 12. **运行时主 Agent 不持有裸 Bash / 全局文件读写 / 全局 grep**。同类原语只以受控形态存在:代码仓检索与读取在 code-svc(只读、限索引仓),代码执行在 sandbox-svc,文件读写走 workspace 句柄(虚拟、租户隔离)。开发态 Claude Code 持有这些原语,产品运行时不继承。
 13. **`web_search` / `web_fetch` 默认关闭**:按角色开启 + 域名白名单;抓取内容按红线 7 当不可信数据处理。
+14. **内嵌前端 `web/` 零构建红线**:禁打包器 / npm 框架(原生 HTML/CSS + Alpine);第三方库自托管于 `web/vendor/`,不引公网 CDN;前端不解析业务文档、不解压 zip(归后端 `parse_user_file` / `/skills/upload`);渲染助手输出与工具结果前必经 DOMPurify 消毒(对齐红线 7 不可信数据)。
 
 ## 3. 仓库结构与设计章节映射
 
@@ -57,10 +61,11 @@
 │   └── prompts/                    # 提示词,带版本号,不覆盖旧版
 ├── evals/                          # 金标集 + runner(方案 §10.2)
 │   └── nl2sql/  rag-qa/  code-qa/  sop-replay/  e2e/
-└── pipelines/                      # 代码索引 CI、文档摄取、SOP 回放 CI
+├── pipelines/                      # 代码索引 CI、文档摄取、SOP 回放 CI
+└── web/                            # 内嵌前端(原生+Alpine,零构建,agent-gateway 伺服)
 ```
 
-改哪里,先读哪章:orchestrator→§4;code-svc→§5.1;data-svc→§5.2;rag-svc→§5.3;sop-executor 与 assets/sops→§5.4;sandbox-svc、scheduler-svc 与各基础工具→§5.5;assets/skills→§6;memory-svc→§7;reflection-worker→§8;contracts 与安全横切→§9;evals→§10。
+改哪里,先读哪章:orchestrator→§4;code-svc→§5.1;data-svc→§5.2;rag-svc→§5.3;sop-executor 与 assets/sops→§5.4;sandbox-svc、scheduler-svc 与各基础工具→§5.5;assets/skills→§6;memory-svc→§7;reflection-worker→§8;contracts 与安全横切→§9;evals→§10。内嵌前端 `web/`→`docs/design/frontend-design.md`(设计)+ `docs/prompts/frontend-stages.md`(分阶段实施)。
 
 ## 4. 技术栈与统一命令
 
@@ -78,6 +83,8 @@ make contract-test   # contracts 契约测试
 make eval E=nl2sql   # 评估回归(nl2sql | rag-qa | code-qa | sop-replay | e2e)
 make sop-validate    # assets/sops schema 校验 + 静态交叉校验
 ```
+
+> **内嵌前端 `web/` 不走 make**:验证 = `web/mock/selftest.html` 全 PASS(贴通过/失败计数)+ 浏览器无 console 报错 + 该阶段手动验收清单逐项过;详见 `docs/prompts/frontend-stages.md`、`docs/acceptance-web-v0.md`。
 
 ## 5. 核心契约(改动最敏感的文件)
 
@@ -138,5 +145,6 @@ v0 为离线自洽闭环(全部 fixture/stub)。投产前的真实接入(均已�
 3. **代码仓放入**:code-svc 索引真实只读仓(`index_repos` 已就位),配置受控仓清单。
 4. **生产沙箱**:run_analysis 用 `ContainerRunner` 替换开发态 `SubprocessRunner`(强隔离落地)。
 5. **审批引擎对接**:escalate/notify/sop 写回对接真实工单与业务写 API(`HttpCaller` 已留)。
+6. **内嵌前端后端端点**:agent-gateway 已伺服 `web/` + SPA 回退(`FP_DEV_STUB` 开发桩);待补 `POST /files` + `/chat` 接 `attachments`、`parse_user_file` 解析器分批(DOCX/MD/JSON/HTML 优先)、`/skills` CRUD + `/skills/{id}/status` + `/skills/upload`(安全解压)。汇总见 `docs/integration/backend-gaps.md`。
 
 文档待补(非阻塞):`docs/glossary.md`、各服务 CLAUDE.md、`docs/security/logging.md`。
