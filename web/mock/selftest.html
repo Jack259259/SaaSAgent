@@ -32,6 +32,8 @@
     import { installMockSSE, parseSSE } from './mock-sse.js';
     import { renderMarkdown } from '../js/markdown.js';
     import { appendToken } from '../js/chat.js';
+    import { newRun, applyPlan, applyStep, applyToolCall, applyToolResult, applyErrorToRun, snapshotRun, classifyResult, toolDisplayName } from '../js/run.js';
+    import { postChatStream, buildChatBody, buildConfirmBody, buildAskBody } from '../js/sse.js';
 
     const results = [];
     const assert = (name, cond) => results.push({ name, ok: !!cond });
@@ -86,6 +88,60 @@
     const sm = { raw: '', streamText: '' };
     appendToken(sm, 'a'); appendToken(sm, 'b1'); appendToken(sm, 'c');
     assert('stream: append 顺序正确(ab1c)', sm.streamText === 'ab1c' && sm.raw === 'ab1c');
+
+    // ===== W2:SSE 分流 / currentRun 投影 / 折叠分档 / 集成 =====
+    const multi =
+      'event: plan\ndata: {"version":1,"steps":[]}\n\n' +
+      'event: step\ndata: {"index":0,"note":"n"}\n\n' +
+      'event: tool_call\ndata: {"id":"c1","tool":"query_finance_data","arguments":{}}\n\n' +
+      'event: tool_result_summary\ndata: {"id":"c1","tool":"query_finance_data","summary":"s","workspace_ref":"w"}\n\n' +
+      'event: answer_delta\ndata: {"text":"a"}\n\n' +
+      'event: done\ndata: {"stop_reason":"end_turn","used_steps":1}\n\n';
+    const mtypes = parseSSE(multi).map((e) => e.event);
+    assert('sse: 分流各事件类型', ['plan', 'step', 'tool_call', 'tool_result_summary', 'answer_delta', 'done'].every((t) => mtypes.includes(t)));
+
+    const run = newRun();
+    applyPlan(run, { version: 1, steps: [{ id: 'a', goal: 'g0' }, { id: 'b', goal: 'g1' }, { id: 'c', goal: 'g2' }] });
+    assert('run: applyPlan 设置 3 步(pending)', run.plan.steps.length === 3 && run.plan.steps[0].status === 'pending');
+    applyStep(run, { index: 1, note: 'doing' });
+    assert('run: applyStep 投影(0完成/1进行中/focus)', run.plan.steps[0].status === 'done' && run.plan.steps[1].status === 'running' && run.focus === 'doing');
+    applyToolCall(run, { id: 't1', tool: 'search_knowledge', arguments: {} });
+    const it1 = run.toolTimeline.find((t) => t.id === 't1');
+    assert('run: tool_call→running + 文案映射', it1.status === 'running' && it1.displayName === '检索知识库');
+    applyToolResult(run, { id: 't1', tool: 'search_knowledge', summary: '短结果', workspace_ref: 'w' });
+    assert('run: tool_result→done + tier=inline', it1.status === 'done' && it1.tier === 'inline');
+    applyToolCall(run, { id: 't2', tool: 'x', arguments: {} });
+    applyErrorToRun(run);
+    assert('run: applyErrorToRun 运行中→失败', run.toolTimeline.find((t) => t.id === 't2').status === 'failed');
+
+    assert('run: toolDisplayName 回退原名', toolDisplayName('unknown_tool') === 'unknown_tool');
+    assert('fold: 短→inline', classifyResult('返回 3 行').tier === 'inline');
+    assert('fold: 长文本→long', classifyResult('x'.repeat(250)).tier === 'long');
+    assert('fold: 表格→structured', classifyResult('| a | b |\n| - | - |\n| 1 | 2 |').tier === 'structured');
+    assert('fold: 代码围栏→structured', classifyResult('```js\ncode\n```').tier === 'structured');
+
+    assert('run: snapshotRun 有 plan→run 块', !!snapshotRun(run) && snapshotRun(run).type === 'run');
+    assert('run: snapshotRun 无 plan→null', snapshotRun(newRun()) === null);
+
+    const cbody = buildConfirmBody('sid', true);
+    assert('sse: buildConfirmBody 形状', cbody.session_id === 'sid' && cbody.confirmation.confirmed === true);
+    const abody = buildAskBody('sid', { 0: 'x' });
+    assert('sse: buildAskBody 形状', abody.session_id === 'sid' && abody.answers['0'] === 'x');
+
+    await assertAsync('sse(集成): simple 流 answer_delta×3 + done', async () => {
+      const evs = []; const r = await postChatStream(buildChatBody('hi'), { onEvent: (t) => evs.push(t) });
+      return r.sawDone === true && evs.filter((t) => t === 'answer_delta').length === 3 && evs.includes('done');
+    });
+    let resumeSid = '';
+    await assertAsync('sse(集成): 复杂流 plan+confirm 暂停(无 done,有 sessionId)', async () => {
+      const evs = []; const r = await postChatStream(buildChatBody('复杂任务确认'), { onEvent: (t) => evs.push(t) });
+      resumeSid = r.sessionId;
+      return r.sawDone === false && !!r.sessionId && evs.includes('plan') && evs.includes('confirm_request');
+    });
+    await assertAsync('sse(集成): /chat/confirm 续传至 citation+done', async () => {
+      const evs = []; const r = await postChatStream(buildConfirmBody(resumeSid, true), { url: '/chat/confirm', onEvent: (t) => evs.push(t) });
+      return r.sawDone === true && evs.includes('citation') && evs.includes('done');
+    });
 
     // ===== 渲染结果 =====
     const passed = results.filter((r) => r.ok).length;

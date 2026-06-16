@@ -7,7 +7,6 @@
   <meta name="description" content="资金计划 SaaS 智能助手 · 内嵌前端(原生 + Alpine,零构建,同源同部署)">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%230d9488'/%3E%3C/svg%3E">
 
-  <!-- 主题预置:首次绘制前读取本机偏好并设 data-theme,避免 FOUC(非业务逻辑) -->
   <script>
     (function () {
       try {
@@ -21,7 +20,6 @@
   <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/app.css">
   <link rel="stylesheet" href="vendor/highlight/github.min.css" id="hljs-theme">
-  <!-- 第三方库(UMD 全局,自托管不引 CDN;markdown.js 用 window.marked/hljs/DOMPurify) -->
   <script src="vendor/marked/marked.min.js"></script>
   <script src="vendor/highlight/highlight.min.js"></script>
   <script src="vendor/dompurify/purify.min.js"></script>
@@ -32,9 +30,7 @@
     <!-- ===== Sidebar ===== -->
     <aside class="sidebar" :class="{ open: sidebarOpen }" aria-label="会话与导航">
       <div class="sidebar-head">
-        <button class="new-btn" type="button" @click="newConversation()">
-          <span class="i" x-html="icon('plus')"></span>新建对话
-        </button>
+        <button class="new-btn" type="button" @click="newConversation()"><span class="i" x-html="icon('plus')"></span>新建对话</button>
       </div>
       <nav class="conv-list" aria-label="历史会话">
         <div class="conv-group">今天</div>
@@ -51,55 +47,206 @@
     <!-- ===== Main ===== -->
     <div class="main-col">
       <header class="topbar">
-        <button class="icon-btn hamburger" type="button" @click="sidebarOpen = !sidebarOpen"
-                aria-label="打开 / 关闭侧栏" x-html="icon('menu')"></button>
+        <button class="icon-btn hamburger" type="button" @click="sidebarOpen = !sidebarOpen" aria-label="打开 / 关闭侧栏" x-html="icon('menu')"></button>
         <div class="topbar-title" x-text="conversationTitle"></div>
         <div class="topbar-actions">
-          <button class="icon-btn" type="button" @click="toggleTheme()"
-                  :aria-label="theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题'"
-                  :title="theme === 'dark' ? '切换到亮色' : '切换到暗色'"
-                  x-html="theme === 'dark' ? icon('sun') : icon('moon')"></button>
-          <button class="icon-btn" type="button" aria-label="用户菜单" title="用户菜单(占位)"
-                  x-html="icon('user')"></button>
+          <button class="icon-btn" type="button" @click="toggleTheme()" :aria-label="theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题'" :title="theme === 'dark' ? '切换到亮色' : '切换到暗色'" x-html="theme === 'dark' ? icon('sun') : icon('moon')"></button>
+          <button class="icon-btn" type="button" aria-label="用户菜单" title="用户菜单(占位)" x-html="icon('user')"></button>
         </div>
       </header>
 
       <main class="chat" :class="{ 'is-empty': !hasMessages }">
-        <!-- 顶部任务进展区插槽(W2) -->
 
-        <!-- 空状态:欢迎区 + 居中输入框 -->
+        <!-- ===== 顶部任务进展区(改动①):仅当本轮有 plan 时出现 ===== -->
+        <template x-if="currentRun && currentRun.plan">
+          <section class="run-panel live" aria-label="任务进展">
+            <div class="run-head">
+              <button class="run-toggle" type="button" @click="toggleCollapse(currentRun)">
+                <span class="chev" :class="{ open: !currentRun?.collapsed }">▸</span>
+                <span x-show="currentRun?.collapsed" x-text="runSummary(currentRun)"></span>
+                <span x-show="!currentRun?.collapsed">任务进展</span>
+              </button>
+              <div class="run-actions" x-show="!currentRun?.collapsed && currentRun?.toolTimeline?.length">
+                <button class="link-btn" type="button" @click="expandAllTools(currentRun.toolTimeline, true)">展开全部</button>
+                <button class="link-btn" type="button" @click="expandAllTools(currentRun.toolTimeline, false)">收起全部</button>
+              </div>
+            </div>
+            <div class="run-body" x-show="!currentRun?.collapsed">
+              <ol class="plan-steps">
+                <template x-for="(s, si) in (currentRun?.plan?.steps || [])" :key="s.id || si">
+                  <li class="plan-step" :class="'st-' + s.status">
+                    <span class="step-dot"></span>
+                    <span class="step-goal" x-text="s.goal"></span>
+                    <span class="step-status" x-text="stepLabel(s.status)"></span>
+                  </li>
+                </template>
+              </ol>
+              <div class="run-focus" x-show="currentRun?.focus" x-text="'▸ ' + (currentRun?.focus || '')"></div>
+              <ul class="tool-timeline" x-show="currentRun?.toolTimeline?.length">
+                <template x-for="(t, ti) in (currentRun?.toolTimeline || [])" :key="t.id || ti">
+                  <li class="tool-item" :class="'ts-' + t.status">
+                    <div class="tool-row" :class="{ clickable: t.status !== 'running' && t.tier !== 'inline' }" @click="t.status !== 'running' && t.tier !== 'inline' && toggleTool(currentRun.toolTimeline, ti)">
+                      <span class="tool-stat" :class="'ts-' + t.status" x-text="toolStatIcon(t.status)"></span>
+                      <span class="tool-name" x-text="t.displayName"></span>
+                      <span class="tool-ov" x-text="toolOverview(t)"></span>
+                      <span class="tool-exp" x-show="t.status !== 'running' && t.tier !== 'inline'" x-text="t.expanded ? '收起' : '展开 ▸'"></span>
+                    </div>
+                    <div class="tool-result" x-show="t.status !== 'running' && (t.tier === 'inline' || t.expanded)">
+                      <div class="tool-result-box" x-show="t.tier === 'structured'" @click="onBodyClick($event)" x-html="toolResultHtml(t)"></div>
+                      <div class="tool-result-text" x-show="t.tier !== 'structured'" x-text="t.resultSummary"></div>
+                    </div>
+                  </li>
+                </template>
+              </ul>
+            </div>
+          </section>
+        </template>
+
+        <!-- ===== 空状态 ===== -->
         <section class="welcome" x-show="!hasMessages">
           <h1 class="welcome-title">资金计划助手</h1>
           <p class="welcome-sub">问我资金计划、取数、知识检索或页面操作。</p>
           <form class="composer" @submit.prevent="sendMessage()">
-            <button class="icon-btn attach" type="button" disabled title="附件(W3)" aria-label="添加附件"
-                    x-html="icon('paperclip')"></button>
-            <textarea class="composer-input" rows="1" x-model="draft"
-                      placeholder="给资金计划助手发消息…(Enter 发送,Shift+Enter 换行)"
-                      @keydown="onComposerKeydown($event)" @input="autogrow($event)" aria-label="消息输入"></textarea>
-            <button class="send-btn" type="submit" :disabled="!canSend()" aria-label="发送"
-                    x-html="icon('arrow-up')"></button>
+            <button class="icon-btn attach" type="button" disabled title="附件(W3)" aria-label="添加附件" x-html="icon('paperclip')"></button>
+            <textarea class="composer-input" rows="1" x-model="draft" placeholder="给资金计划助手发消息…(Enter 发送,Shift+Enter 换行)" @keydown="onComposerKeydown($event)" @input="autogrow($event)" aria-label="消息输入"></textarea>
+            <button class="send-btn" type="submit" :disabled="!canSend()" aria-label="发送" x-html="icon('arrow-up')"></button>
           </form>
+          <p class="welcome-hint">试试:复杂任务 / 并行 / replan / 错误 / 延迟(停止)/ 澄清 —— 触发不同 mock 场景</p>
         </section>
 
-        <!-- 会话区 -->
+        <!-- ===== 会话区 ===== -->
         <div class="scroller" x-ref="scroller" @scroll="onScroll($event)" x-show="hasMessages">
           <div class="messages" aria-live="polite">
             <template x-for="m in messages" :key="m.id">
               <article class="msg" :class="'msg-' + m.role">
                 <div class="msg-inner">
-                  <!-- 助手:富卡片插槽(W2 填充 m.cards) -->
-                  <div class="card-slot" x-show="m.role === 'assistant' && (m.cards || []).length"></div>
 
-                  <!-- 用户:纯文本(保留换行) -->
+                  <!-- 用户:纯文本 -->
                   <div class="msg-body user-body" x-show="m.role === 'user'" x-text="m.raw"></div>
 
-                  <!-- 助手:流式纯文本 → 完成转 Markdown -->
-                  <div class="msg-body assistant-body" x-show="m.role === 'assistant'" @click="onBodyClick($event)">
-                    <span class="stream-text" x-show="m.streaming" x-text="m.streamText"></span><span
-                      class="cursor" x-show="m.streaming" aria-hidden="true"></span>
-                    <div class="md" x-show="!m.streaming" x-html="m.html"></div>
-                  </div>
+                  <!-- 助手:按到达顺序渲染 blocks -->
+                  <template x-if="m.role === 'assistant'">
+                    <div class="asst">
+                      <template x-for="(b, bi) in m.blocks" :key="bi">
+                        <div class="block">
+
+                          <!-- text -->
+                          <template x-if="b.type === 'text'">
+                            <div class="msg-body assistant-body" @click="onBodyClick($event)">
+                              <span class="stream-text" x-show="b.open" x-text="b.raw"></span><span class="cursor" x-show="b.open && m.streaming" aria-hidden="true"></span>
+                              <div class="md" x-show="!b.open" x-html="b.html"></div>
+                            </div>
+                          </template>
+
+                          <!-- ConfirmCard -->
+                          <template x-if="b.type === 'confirm'">
+                            <div class="card confirm-card">
+                              <div class="card-title">需要确认</div>
+                              <div class="card-body" x-text="b.prompt"></div>
+                              <div class="card-actions" x-show="!b.resolved">
+                                <button class="btn primary" type="button" @click="confirmChoice(b, true)" x-text="(b.options && b.options[0]) || '确认'"></button>
+                                <button class="btn" type="button" @click="confirmChoice(b, false)" x-text="(b.options && b.options[1]) || '取消'"></button>
+                              </div>
+                              <div class="card-done" x-show="b.resolved" x-text="b.confirmed ? '已确认' : '已取消'"></div>
+                            </div>
+                          </template>
+
+                          <!-- AskUserCard -->
+                          <template x-if="b.type === 'ask'">
+                            <div class="card ask-card">
+                              <div class="card-title">需要澄清</div>
+                              <template x-for="(q, qi) in b.questions" :key="qi">
+                                <div class="ask-q">
+                                  <div class="ask-question" x-text="q.question"></div>
+                                  <div class="ask-options">
+                                    <template x-for="(opt, oi) in (q.options || [])" :key="oi">
+                                      <button class="chip" type="button" :class="{ sel: b.selected[qi] === opt }" :disabled="b.resolved" @click="askPick(b, qi, opt)" x-text="opt"></button>
+                                    </template>
+                                  </div>
+                                </div>
+                              </template>
+                              <div class="card-actions" x-show="!b.resolved">
+                                <button class="btn primary" type="button" :disabled="!askComplete(b)" @click="submitAsk(b)">提交</button>
+                              </div>
+                              <div class="card-done" x-show="b.resolved">已提交</div>
+                            </div>
+                          </template>
+
+                          <!-- CitationList -->
+                          <template x-if="b.type === 'citation'">
+                            <div class="card citation-card">
+                              <div class="card-title">来源引用</div>
+                              <ul class="cite-list">
+                                <template x-for="(c, ci) in b.items" :key="ci">
+                                  <li><a :href="c.ref || '#'" target="_blank" rel="noopener noreferrer" x-text="c.title"></a><span class="cite-src" x-show="c.source" x-text="' · ' + c.source"></span></li>
+                                </template>
+                              </ul>
+                            </div>
+                          </template>
+
+                          <!-- ErrorBanner -->
+                          <template x-if="b.type === 'error'">
+                            <div class="card error-card">
+                              <div class="card-title">出错了</div>
+                              <div class="card-body" x-text="b.message"></div>
+                              <div class="card-actions"><button class="btn" type="button" @click="retry()">重试</button></div>
+                            </div>
+                          </template>
+
+                          <!-- note(已停止等) -->
+                          <template x-if="b.type === 'note'">
+                            <div class="msg-note" x-text="b.text"></div>
+                          </template>
+
+                          <!-- run 留痕(改动①②历史) -->
+                          <template x-if="b.type === 'run'">
+                            <section class="run-panel snapshot">
+                              <div class="run-head">
+                                <button class="run-toggle" type="button" @click="toggleCollapse(b)">
+                                  <span class="chev" :class="{ open: !b.collapsed }">▸</span>
+                                  <span x-show="b.collapsed" x-text="runSummary(b)"></span>
+                                  <span x-show="!b.collapsed">任务进展(已完成)</span>
+                                </button>
+                                <div class="run-actions" x-show="!b.collapsed && b.toolTimeline.length">
+                                  <button class="link-btn" type="button" @click="expandAllTools(b.toolTimeline, true)">展开全部</button>
+                                  <button class="link-btn" type="button" @click="expandAllTools(b.toolTimeline, false)">收起全部</button>
+                                </div>
+                              </div>
+                              <div class="run-body" x-show="!b.collapsed">
+                                <ol class="plan-steps">
+                                  <template x-for="(s, si) in b.plan.steps" :key="s.id || si">
+                                    <li class="plan-step" :class="'st-' + s.status">
+                                      <span class="step-dot"></span>
+                                      <span class="step-goal" x-text="s.goal"></span>
+                                      <span class="step-status" x-text="stepLabel(s.status)"></span>
+                                    </li>
+                                  </template>
+                                </ol>
+                                <ul class="tool-timeline" x-show="b.toolTimeline.length">
+                                  <template x-for="(t, ti) in b.toolTimeline" :key="t.id || ti">
+                                    <li class="tool-item" :class="'ts-' + t.status">
+                                      <div class="tool-row" :class="{ clickable: t.tier !== 'inline' }" @click="t.tier !== 'inline' && toggleTool(b.toolTimeline, ti)">
+                                        <span class="tool-stat" :class="'ts-' + t.status" x-text="toolStatIcon(t.status)"></span>
+                                        <span class="tool-name" x-text="t.displayName"></span>
+                                        <span class="tool-ov" x-text="toolOverview(t)"></span>
+                                        <span class="tool-exp" x-show="t.tier !== 'inline'" x-text="t.expanded ? '收起' : '展开 ▸'"></span>
+                                      </div>
+                                      <div class="tool-result" x-show="t.tier === 'inline' || t.expanded">
+                                        <div class="tool-result-box" x-show="t.tier === 'structured'" @click="onBodyClick($event)" x-html="toolResultHtml(t)"></div>
+                                        <div class="tool-result-text" x-show="t.tier !== 'structured'" x-text="t.resultSummary"></div>
+                                      </div>
+                                    </li>
+                                  </template>
+                                </ul>
+                              </div>
+                            </section>
+                          </template>
+
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+
                 </div>
               </article>
             </template>
@@ -107,19 +254,12 @@
         </div>
       </main>
 
-      <!-- 底部 Composer(发首条后落底) -->
+      <!-- 底部 Composer -->
       <div class="composer-bar" x-show="hasMessages">
         <form class="composer" @submit.prevent="sendMessage()">
-          <button class="icon-btn attach" type="button" disabled title="附件(W3)" aria-label="添加附件"
-                  x-html="icon('paperclip')"></button>
-          <textarea class="composer-input" rows="1" x-model="draft"
-                    placeholder="给资金计划助手发消息…"
-                    @keydown="onComposerKeydown($event)" @input="autogrow($event)" aria-label="消息输入"></textarea>
-          <button class="send-btn" type="button"
-                  @click="sendStatus === 'streaming' ? stopStream() : sendMessage()"
-                  :disabled="sendStatus !== 'streaming' && !canSend()"
-                  :class="{ 'is-stop': sendStatus === 'streaming' }"
-                  :aria-label="sendStatus === 'streaming' ? '停止' : '发送'">
+          <button class="icon-btn attach" type="button" disabled title="附件(W3)" aria-label="添加附件" x-html="icon('paperclip')"></button>
+          <textarea class="composer-input" rows="1" x-model="draft" placeholder="给资金计划助手发消息…" @keydown="onComposerKeydown($event)" @input="autogrow($event)" aria-label="消息输入"></textarea>
+          <button class="send-btn" type="button" @click="sendStatus === 'streaming' ? stopStream() : sendMessage()" :disabled="sendStatus !== 'streaming' && !canSend()" :class="{ 'is-stop': sendStatus === 'streaming' }" :aria-label="sendStatus === 'streaming' ? '停止' : '发送'">
             <span x-show="sendStatus !== 'streaming'" x-html="icon('arrow-up')"></span>
             <span x-show="sendStatus === 'streaming'" class="stop-sq" aria-hidden="true"></span>
           </button>
@@ -129,7 +269,6 @@
     </div>
   </div>
 
-  <!-- 顺序要紧:app.js(module)先注册 alpine:init,再加载 Alpine(defer,文档顺序在后)。 -->
   <script type="module" src="js/app.js"></script>
   <script defer src="vendor/alpine/alpine.min.js"></script>
 </body>

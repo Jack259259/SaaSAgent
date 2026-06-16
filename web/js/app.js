@@ -1,9 +1,13 @@
-// app.js — Alpine 根组件:主题 + 抽屉 + 聊天(合入 chat.js);开发态装载 mock。
+// app.js — Alpine 根组件:主题 + 抽屉 + 聊天(合入 chat.js);开发态装载 mock + 注入 X-User-Ctx。
 import { installMockSSE } from '../mock/mock-sse.js';
 import { icon } from '../vendor/lucide/icons.js';
 import { createChat } from './chat.js';
+import { setUserCtx } from './sse.js';
 
-installMockSSE(); // 开发态装载 mock(W1 未走 /chat,W2 接入真实流时即生效)
+installMockSSE(); // 开发态装载 mock(拦截 /chat 与 /chat/confirm)
+
+// 开发态注入 X-User-Ctx(§12-D4;生产同源走 cookie/session,前端不自造权限)。
+setUserCtx({ tenant_id: 'demo-tenant', user_id: 'demo-user', roles: ['analyst'], data_scope: { regions: ['*'] } });
 
 const HLJS_THEME = {
   light: 'vendor/highlight/github.min.css',
