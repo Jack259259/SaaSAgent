@@ -265,3 +265,62 @@ a{color:var(--accent);}
 .chip[disabled]{opacity:.7;cursor:default;}
 
 .msg-note{font-size:var(--text-xs);color:var(--text-muted);text-align:center;padding:var(--space-1);}
+
+/* ===== W3:文件上传 / 附件 / 拖拽 / 会话列表 ===== */
+.file-input-hidden{display:none;}
+
+/* composer 改为纵向(附件行 + 输入行) */
+.composer{flex-direction:column;align-items:stretch;}
+.composer-row{display:flex;align-items:flex-end;gap:var(--space-2);}
+
+/* 整页拖拽遮罩 */
+.drag-overlay{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb, var(--accent) 12%, rgba(2,6,23,.45));}
+.drag-card{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-6) var(--space-8);
+  border:2px dashed var(--accent);border-radius:var(--radius-lg);background:var(--surface);color:var(--text);font-weight:600;}
+.drag-card svg{width:1.4rem;height:1.4rem;}
+
+/* 附件暂存卡片(composer 内) */
+.attach-row{display:flex;flex-wrap:wrap;gap:var(--space-2);padding:var(--space-1);}
+.att-card{display:flex;align-items:center;gap:var(--space-2);max-width:18rem;
+  border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-2);background:var(--bg-subtle);}
+.att-card.att-error{border-color:var(--danger);}
+.att-thumb{width:2.25rem;height:2.25rem;object-fit:cover;border-radius:var(--radius-sm);flex:none;}
+.att-icon{display:inline-flex;color:var(--text-muted);flex:none;}
+.att-icon svg{width:1.1rem;height:1.1rem;}
+.att-meta{min-width:0;flex:1;}
+.att-name{font-size:var(--text-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.att-sub{font-size:var(--text-xs);color:var(--text-muted);}
+.att-warn{color:var(--accent);}
+.att-err{color:var(--danger);}
+.att-bar{height:3px;background:var(--surface-2);border-radius:2px;margin-top:3px;overflow:hidden;}
+.att-bar-fill{height:100%;background:var(--accent);transition:width .12s linear;}
+.att-retry{font-size:var(--text-xs);color:var(--accent);flex:none;}
+.att-x{width:1.5rem;height:1.5rem;flex:none;}
+.att-x svg{width:.9rem;height:.9rem;}
+
+/* 用户消息内的附件 chip */
+.user-text{white-space:pre-wrap;}
+.user-atts{display:flex;flex-wrap:wrap;gap:var(--space-1);margin-top:var(--space-2);}
+.att-chip{display:inline-flex;align-items:center;gap:var(--space-1);max-width:14rem;
+  padding:var(--space-1) var(--space-2);border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);font-size:var(--text-xs);}
+.att-chip.warn{border-color:var(--accent);}
+.att-chip-thumb{width:1.2rem;height:1.2rem;object-fit:cover;border-radius:3px;}
+.att-chip-icon{display:inline-flex;color:var(--text-muted);}
+.att-chip-icon svg{width:.9rem;height:.9rem;}
+.att-chip-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.att-chip-sz{color:var(--text-muted);}
+.att-chip-warn{color:var(--accent);}
+
+/* 会话列表 */
+.conv-group-wrap{margin-bottom:var(--space-2);}
+.conv-item{display:flex;align-items:center;gap:var(--space-1);border-radius:var(--radius-sm);}
+.conv-item:hover{background:var(--surface-2);}
+.conv-item.is-active{background:var(--surface-2);}
+.conv-open{flex:1;min-width:0;text-align:left;padding:var(--space-2) var(--space-3);color:var(--text);font-size:var(--text-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.conv-item.is-active .conv-open{font-weight:600;}
+.conv-ops{display:none;gap:2px;padding-right:var(--space-1);}
+.conv-item:hover .conv-ops{display:flex;}
+.conv-op{display:inline-flex;align-items:center;justify-content:center;width:1.6rem;height:1.6rem;border-radius:var(--radius-sm);color:var(--text-muted);}
+.conv-op:hover{background:var(--bg);color:var(--text);}
+.conv-op svg{width:.95rem;height:.95rem;}

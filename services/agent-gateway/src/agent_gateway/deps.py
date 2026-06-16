@@ -7,7 +7,7 @@ from pathlib import Path
 
 from code_svc import CodeService
 from data_svc import DataService, PostgresExecutor, SemanticLayer, SqlValidator, WrenAdapter
-from llm import AnthropicProvider, Provider
+from llm import AnthropicProvider, MockProvider, Provider, ScriptedTurn
 from memory_svc import MemoryService
 from orchestrator import SessionStore, ToolRegistry, base_tool_handlers
 from orchestrator.skills import SkillIndex
@@ -54,7 +54,23 @@ _CODE_INDEX_DB = Path("data/code-index/symbols.db")
 
 
 def get_provider() -> Provider:
-    """生产默认:AnthropicProvider(未配置 LLM_API_KEY 时调用即 NOT_CONFIGURED)。"""
+    """生产默认:AnthropicProvider(未配置 LLM_API_KEY 时调用即 NOT_CONFIGURED)。
+
+    FP_DEV_STUB=1:返回离线开发桩(MockProvider 固定作答),供内嵌前端 W3 同源对接演示
+    (`make dev` 无需 LLM_API_KEY 即产出真实 answer_delta+done 轮次)。
+    """
+    if os.environ.get("FP_DEV_STUB") == "1":
+        return MockProvider(
+            [
+                ScriptedTurn(
+                    text=(
+                        "你好,这是来自真实 agent-gateway(开发桩 provider,FP_DEV_STUB)的回答。"
+                        "前端经同源 /chat 直连,SSE 字段对齐 docs/dev/sse-protocol.md。"
+                    ),
+                    stop_reason="end_turn",
+                )
+            ]
+        )
     return AnthropicProvider()
 
 

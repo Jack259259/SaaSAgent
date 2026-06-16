@@ -3,17 +3,16 @@
 // 帧格式事实来源:docs/dev/sse-protocol.md。confirm_request/ask_user 后本段结束(无 done),用 X-Session-Id 续传。
 // W3 关闭(localStorage fp_mock='0')后相对路径直连真实后端,前端零改动。
 
-/** 是否启用 mock:?mock=1 / localStorage fp_mock='1' 强开;'0' 强关;默认在 localhost / file 下开启。 */
-export function isMockEnabled() {
+/** 显式开关:?mock=1 / localStorage fp_mock='1' 强开;'0' 强关;未显式返回 null(由 /healthz 探测决定)。 */
+export function mockForced() {
   try {
     const u = new URL(location.href);
     if (u.searchParams.get('mock') === '1') return true;
     const flag = localStorage.getItem('fp_mock');
     if (flag === '1') return true;
     if (flag === '0') return false;
-  } catch (e) { /* file:// / 无 localStorage,落到 host 判断 */ }
-  const h = (typeof location !== 'undefined' && location.hostname) || '';
-  return h === 'localhost' || h === '127.0.0.1' || h === '';
+  } catch (e) { /* file:// / 无 localStorage */ }
+  return null;
 }
 
 // ---- 事件工厂 ----
@@ -199,12 +198,42 @@ function handleConfirm(body, signal) {
   return streamResponse(seg, sid, signal);
 }
 
+/** mock POST /files:从 multipart 取文件名/大小 → 返回 {file_id,...,parse_supported}。 */
+function handleFiles(formData) {
+  let name = 'file';
+  let size = 0;
+  let mime = '';
+  try {
+    const f = formData && formData.get && formData.get('file');
+    if (f) { name = f.name || name; size = f.size || 0; mime = f.type || ''; }
+  } catch (e) { /* ignore */ }
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const parse_supported = ['xlsx', 'csv', 'pdf'].includes(ext); // 模拟后端 parse_user_file 当前覆盖(§8.3,D3)
+  const body = { file_id: 'file-' + Date.now() + '-' + Math.floor(Math.random() * 1e4), filename: name, mime, size, status: 'uploaded', parse_supported };
+  return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+}
+
 let installed = false;
 
-/** 安装 mock:包裹 window.fetch。仅当 isMockEnabled() 为真时生效;幂等。 */
-export function installMockSSE() {
+/**
+ * 安装 mock:包裹 window.fetch。显式 fp_mock='0' 关;'1'/?mock=1 开;否则探测 /healthz,真实后端在则不装(幂等)。
+ * @returns {Promise<boolean>}
+ */
+export async function installMockSSE() {
   if (installed) return true;
-  if (typeof window === 'undefined' || !isMockEnabled()) return false;
+  if (typeof window === 'undefined') return false;
+  const forced = mockForced();
+  if (forced === false) return false;
+  if (forced !== true) {
+    // 未显式:探测真实后端 /healthz —— 在则不装 mock(经 agent-gateway 同源直连真实 /chat)。
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 1500);
+      const r = await window.fetch('/healthz', { method: 'GET', signal: ctrl.signal });
+      clearTimeout(tid);
+      if (r && r.ok) { if (typeof console !== 'undefined') console.info('[mock-sse] real backend (/healthz) detected — mock disabled'); return false; }
+    } catch (e) { /* 无后端 → 装 mock */ }
+  }
 
   const original = window.fetch.bind(window);
   window.fetch = async (input, init = {}) => {
@@ -219,10 +248,11 @@ export function installMockSSE() {
       const signal = init.signal || (input && input.signal);
       return path === '/chat' ? handleChat(body, signal) : handleConfirm(body, signal);
     }
+    if (method === 'POST' && path === '/files') return handleFiles(init.body);
     return original(input, init);
   };
 
   installed = true;
-  if (typeof console !== 'undefined') console.info('[mock-sse] installed — POST /chat & /chat/confirm intercepted');
+  if (typeof console !== 'undefined') console.info('[mock-sse] installed — /chat, /chat/confirm, /files intercepted');
   return true;
 }

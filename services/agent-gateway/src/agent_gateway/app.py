@@ -8,10 +8,11 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from contracts import UserCtx
@@ -120,3 +121,19 @@ async def chat_confirm(
             yield encode_sse(event)
 
     return _sse_response(event_stream(), session)
+
+
+# ── 内嵌前端静态伺服 + SPA 回退(§10;唯一的前端相关后端改动)──────────────────
+# web/ 为后端仓内嵌前端(原生 + Alpine,零构建,同源同部署)。API 路由(/chat、
+# /chat/confirm、/healthz、未来 /files)已在上方注册并优先;此 GET 捕获路由对 web/ 内
+# 真实文件返回该文件,其余回退 index.html(SPA);candidate 必须落在 _WEB_DIR 内(防目录穿越)。
+_WEB_DIR = Path(__file__).resolve().parents[4] / "web"
+
+if _WEB_DIR.is_dir():
+
+    @app.get("/{full_path:path}")
+    async def serve_web(full_path: str) -> FileResponse:
+        candidate = (_WEB_DIR / full_path).resolve()
+        if full_path and candidate.is_file() and str(candidate).startswith(str(_WEB_DIR)):
+            return FileResponse(candidate)
+        return FileResponse(_WEB_DIR / "index.html")

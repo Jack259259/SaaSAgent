@@ -34,6 +34,8 @@
     import { appendToken } from '../js/chat.js';
     import { newRun, applyPlan, applyStep, applyToolCall, applyToolResult, applyErrorToRun, snapshotRun, classifyResult, toolDisplayName } from '../js/run.js';
     import { postChatStream, buildChatBody, buildConfirmBody, buildAskBody } from '../js/sse.js';
+    import { validateFile, fileExt, humanSize, ATTACH_LIMITS } from '../js/attachments.js';
+    import { createConversationStore, groupByTime } from '../js/store.js';
 
     const results = [];
     const assert = (name, cond) => results.push({ name, ok: !!cond });
@@ -142,6 +144,39 @@
       const evs = []; const r = await postChatStream(buildConfirmBody(resumeSid, true), { url: '/chat/confirm', onEvent: (t) => evs.push(t) });
       return r.sawDone === true && evs.includes('citation') && evs.includes('done');
     });
+
+    // ===== W3:文件校验 + Repository + 附件 =====
+    const mkFile = (name, type, size) => ({ name, type, size }); // 鸭子类型(validateFile 仅读 name/type/size)
+    assert('upload: txt 通过', validateFile(mkFile('a.txt', 'text/plain', 100)).ok === true);
+    assert('upload: 越白名单(exe)拒', validateFile(mkFile('a.exe', 'application/octet-stream', 100)).ok === false);
+    assert('upload: MIME 与扩展名不符拒', validateFile(mkFile('a.png', 'text/plain', 100)).ok === false);
+    assert('upload: 超大小上限拒', validateFile(mkFile('a.txt', 'text/plain', ATTACH_LIMITS.maxBytes + 1)).ok === false);
+    assert('upload: 空 MIME 回退扩展名通过', validateFile(mkFile('a.docx', '', 100)).ok === true);
+    assert('upload: 去重拒', validateFile(mkFile('a.txt', 'text/plain', 100), [{ name: 'a.txt', size: 100 }]).ok === false);
+    assert('upload: fileExt/humanSize', fileExt('x.PDF') === 'pdf' && humanSize(2048) === '2.0KB' && humanSize(500) === '500B');
+
+    const store = createConversationStore();
+    const conv = store.createConversation('selftest临时');
+    assert('repo: create + list 含新会话', store.listConversations().some((x) => x.id === conv.id));
+    store.saveMessages(conv.id, [
+      { id: 'u1', role: 'user', raw: 'hi', attachments: [{ file_id: 'f1', name: 'a.png', size: 10, mime: 'image/png', ext: 'png', status: 'uploaded', parse_supported: false, thumbUrl: 'blob:strip-me', _file: {} }] },
+      { id: 'a1', role: 'assistant', streaming: true, blocks: [{ type: 'text', raw: '答', html: '<p>答</p>', open: false }, { type: 'run', plan: { version: 1, steps: [{ id: 's', goal: 'g', status: 'done' }] }, toolTimeline: [], collapsed: true }] },
+    ]);
+    const got = store.getConversation(conv.id);
+    assert('repo: 富 blocks 往返(text+run)', got.messages.length === 2 && got.messages[1].blocks[1].type === 'run');
+    assert('repo: 附件脱敏(去 thumbUrl/_file,留 file_id)', got.messages[0].attachments[0].thumbUrl === undefined && got.messages[0].attachments[0]._file === undefined && got.messages[0].attachments[0].file_id === 'f1');
+    assert('repo: 助手 streaming 落库为 false', got.messages[1].streaming === false);
+    store.rename(conv.id, '改名了');
+    assert('repo: rename', store.getConversation(conv.id).title === '改名了');
+    store.remove(conv.id);
+    assert('repo: remove → null(清理)', store.getConversation(conv.id) === null);
+
+    const now = Date.now();
+    const grp = groupByTime([{ id: 'a', updated_at: now }, { id: 'b', updated_at: now - 3 * 86400000 }, { id: 'c', updated_at: now - 30 * 86400000 }], now);
+    assert('repo: groupByTime 今天/7天内/更早', grp.today.length === 1 && grp.week.length === 1 && grp.older.length === 1);
+
+    assert('chat: payload 携带 attachments', (() => { const b = buildChatBody('hi', ['f1', 'f2']); return Array.isArray(b.attachments) && b.attachments.length === 2 && b.message === 'hi'; })());
+    assert('chat: 无附件不带 attachments 字段', buildChatBody('hi').attachments === undefined);
 
     // ===== 渲染结果 =====
     const passed = results.filter((r) => r.ok).length;

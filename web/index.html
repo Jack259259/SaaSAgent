@@ -25,7 +25,16 @@
   <script src="vendor/dompurify/purify.min.js"></script>
 </head>
 <body x-data="app" x-cloak>
-  <div class="app-shell">
+  <!-- 共享文件选择(📎 触发) -->
+  <input type="file" multiple class="file-input-hidden" x-ref="fileInput" @change="pickFiles($event)"
+         accept=".docx,.odt,.rtf,.epub,.html,.htm,.md,.markdown,.txt,.xlsx,.csv,.json,.jpg,.jpeg,.png,.gif">
+
+  <div class="app-shell" @dragover="onDragOver($event)" @dragleave="onDragLeave($event)" @drop="onDrop($event)">
+
+    <!-- 整页拖拽遮罩 -->
+    <div class="drag-overlay" x-show="dragover" x-transition.opacity>
+      <div class="drag-card"><span class="i" x-html="icon('paperclip')"></span> 拖拽文件到此上传</div>
+    </div>
 
     <!-- ===== Sidebar ===== -->
     <aside class="sidebar" :class="{ open: sidebarOpen }" aria-label="会话与导航">
@@ -33,12 +42,25 @@
         <button class="new-btn" type="button" @click="newConversation()"><span class="i" x-html="icon('plus')"></span>新建对话</button>
       </div>
       <nav class="conv-list" aria-label="历史会话">
-        <div class="conv-group">今天</div>
-        <button class="conv-item is-active" type="button" x-text="conversationTitle"></button>
-        <p class="conv-hint">会话历史将在 W3 接入(localStorage)。</p>
+        <template x-for="grp in [['today','今天'],['week','7天内'],['older','更早']]" :key="grp[0]">
+          <div class="conv-group-wrap" x-show="convGroups()[grp[0]].length">
+            <div class="conv-group" x-text="grp[1]"></div>
+            <template x-for="c in convGroups()[grp[0]]" :key="c.id">
+              <div class="conv-item" :class="{ 'is-active': c.id === activeConvId }">
+                <button class="conv-open" type="button" @click="switchConversation(c.id)" x-text="c.title"></button>
+                <span class="conv-ops">
+                  <button class="conv-op" type="button" @click.stop="renameConversation(c.id)" title="重命名" aria-label="重命名" x-html="icon('pencil')"></button>
+                  <button class="conv-op" type="button" @click.stop="deleteConversation(c.id)" title="删除" aria-label="删除" x-html="icon('trash')"></button>
+                </span>
+              </div>
+            </template>
+          </div>
+        </template>
+        <p class="conv-hint" x-show="!conversations.length">还没有历史会话(本机 localStorage)。</p>
       </nav>
       <div class="sidebar-foot">
         <button class="side-link" type="button">Skill 管理<span class="soon">W4</span></button>
+        <button class="side-link" type="button" @click="clearHistory()">清除本地历史</button>
         <button class="side-link" type="button">用户 / 设置</button>
       </div>
     </aside>
@@ -57,7 +79,7 @@
 
       <main class="chat" :class="{ 'is-empty': !hasMessages }">
 
-        <!-- ===== 顶部任务进展区(改动①):仅当本轮有 plan 时出现 ===== -->
+        <!-- ===== 顶部任务进展区(W2,改动①) ===== -->
         <template x-if="currentRun && currentRun.plan">
           <section class="run-panel live" aria-label="任务进展">
             <div class="run-head">
@@ -107,9 +129,31 @@
           <h1 class="welcome-title">资金计划助手</h1>
           <p class="welcome-sub">问我资金计划、取数、知识检索或页面操作。</p>
           <form class="composer" @submit.prevent="sendMessage()">
-            <button class="icon-btn attach" type="button" disabled title="附件(W3)" aria-label="添加附件" x-html="icon('paperclip')"></button>
-            <textarea class="composer-input" rows="1" x-model="draft" placeholder="给资金计划助手发消息…(Enter 发送,Shift+Enter 换行)" @keydown="onComposerKeydown($event)" @input="autogrow($event)" aria-label="消息输入"></textarea>
-            <button class="send-btn" type="submit" :disabled="!canSend()" aria-label="发送" x-html="icon('arrow-up')"></button>
+            <div class="attach-row" x-show="attachments.length">
+              <template x-for="a in attachments" :key="a.localId">
+                <div class="att-card" :class="'att-' + a.status">
+                  <template x-if="a.thumbUrl"><img class="att-thumb" :src="a.thumbUrl" :alt="a.name"></template>
+                  <span class="att-icon" x-show="!a.thumbUrl" x-html="icon('paperclip')"></span>
+                  <div class="att-meta">
+                    <div class="att-name" x-text="a.name"></div>
+                    <div class="att-sub">
+                      <span x-text="humanSize(a.size)"></span>
+                      <span x-show="a.status === 'uploading'" x-text="' · ' + Math.round(a.progress) + '%'"></span>
+                      <span class="att-warn" x-show="a.status === 'uploaded' && a.parse_supported === false"> · 已上传,解析待后端支持</span>
+                      <span class="att-err" x-show="a.status === 'error'" x-text="' · ' + a.error"></span>
+                    </div>
+                    <div class="att-bar" x-show="a.status === 'uploading'"><div class="att-bar-fill" :style="'width:' + a.progress + '%'"></div></div>
+                  </div>
+                  <button class="att-retry" type="button" x-show="a.status === 'error'" @click="retryAttachment(a.localId)">重试</button>
+                  <button class="att-x icon-btn" type="button" @click="removeAttachment(a.localId)" aria-label="移除" x-html="icon('x')"></button>
+                </div>
+              </template>
+            </div>
+            <div class="composer-row">
+              <button class="icon-btn attach" type="button" @click="$refs.fileInput.click()" title="添加附件" aria-label="添加附件" x-html="icon('paperclip')"></button>
+              <textarea class="composer-input" rows="1" x-model="draft" placeholder="给资金计划助手发消息…(Enter 发送,Shift+Enter 换行)" @keydown="onComposerKeydown($event)" @input="autogrow($event)" aria-label="消息输入"></textarea>
+              <button class="send-btn" type="submit" :disabled="!canSend()" aria-label="发送" x-html="icon('arrow-up')"></button>
+            </div>
           </form>
           <p class="welcome-hint">试试:复杂任务 / 并行 / replan / 错误 / 延迟(停止)/ 澄清 —— 触发不同 mock 场景</p>
         </section>
@@ -121,24 +165,33 @@
               <article class="msg" :class="'msg-' + m.role">
                 <div class="msg-inner">
 
-                  <!-- 用户:纯文本 -->
-                  <div class="msg-body user-body" x-show="m.role === 'user'" x-text="m.raw"></div>
+                  <!-- 用户:纯文本 + 附件卡片 -->
+                  <div class="msg-body user-body" x-show="m.role === 'user'">
+                    <div class="user-text" x-text="m.raw"></div>
+                    <div class="user-atts" x-show="m.attachments && m.attachments.length">
+                      <template x-for="(a, ai) in (m.attachments || [])" :key="ai">
+                        <div class="att-chip" :class="{ warn: a.parse_supported === false }">
+                          <template x-if="a.thumbUrl"><img class="att-chip-thumb" :src="a.thumbUrl" :alt="a.name"></template>
+                          <span class="att-chip-icon" x-show="!a.thumbUrl" x-html="icon('paperclip')"></span>
+                          <span class="att-chip-name" x-text="a.name"></span>
+                          <span class="att-chip-sz" x-text="humanSize(a.size)"></span>
+                          <span class="att-chip-warn" x-show="a.parse_supported === false" title="解析待后端支持">⚠</span>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
 
-                  <!-- 助手:按到达顺序渲染 blocks -->
+                  <!-- 助手:blocks -->
                   <template x-if="m.role === 'assistant'">
                     <div class="asst">
                       <template x-for="(b, bi) in m.blocks" :key="bi">
                         <div class="block">
-
-                          <!-- text -->
                           <template x-if="b.type === 'text'">
                             <div class="msg-body assistant-body" @click="onBodyClick($event)">
                               <span class="stream-text" x-show="b.open" x-text="b.raw"></span><span class="cursor" x-show="b.open && m.streaming" aria-hidden="true"></span>
                               <div class="md" x-show="!b.open" x-html="b.html"></div>
                             </div>
                           </template>
-
-                          <!-- ConfirmCard -->
                           <template x-if="b.type === 'confirm'">
                             <div class="card confirm-card">
                               <div class="card-title">需要确认</div>
@@ -150,8 +203,6 @@
                               <div class="card-done" x-show="b.resolved" x-text="b.confirmed ? '已确认' : '已取消'"></div>
                             </div>
                           </template>
-
-                          <!-- AskUserCard -->
                           <template x-if="b.type === 'ask'">
                             <div class="card ask-card">
                               <div class="card-title">需要澄清</div>
@@ -171,8 +222,6 @@
                               <div class="card-done" x-show="b.resolved">已提交</div>
                             </div>
                           </template>
-
-                          <!-- CitationList -->
                           <template x-if="b.type === 'citation'">
                             <div class="card citation-card">
                               <div class="card-title">来源引用</div>
@@ -183,8 +232,6 @@
                               </ul>
                             </div>
                           </template>
-
-                          <!-- ErrorBanner -->
                           <template x-if="b.type === 'error'">
                             <div class="card error-card">
                               <div class="card-title">出错了</div>
@@ -192,13 +239,9 @@
                               <div class="card-actions"><button class="btn" type="button" @click="retry()">重试</button></div>
                             </div>
                           </template>
-
-                          <!-- note(已停止等) -->
                           <template x-if="b.type === 'note'">
                             <div class="msg-note" x-text="b.text"></div>
                           </template>
-
-                          <!-- run 留痕(改动①②历史) -->
                           <template x-if="b.type === 'run'">
                             <section class="run-panel snapshot">
                               <div class="run-head">
@@ -241,7 +284,6 @@
                               </div>
                             </section>
                           </template>
-
                         </div>
                       </template>
                     </div>
@@ -257,12 +299,34 @@
       <!-- 底部 Composer -->
       <div class="composer-bar" x-show="hasMessages">
         <form class="composer" @submit.prevent="sendMessage()">
-          <button class="icon-btn attach" type="button" disabled title="附件(W3)" aria-label="添加附件" x-html="icon('paperclip')"></button>
-          <textarea class="composer-input" rows="1" x-model="draft" placeholder="给资金计划助手发消息…" @keydown="onComposerKeydown($event)" @input="autogrow($event)" aria-label="消息输入"></textarea>
-          <button class="send-btn" type="button" @click="sendStatus === 'streaming' ? stopStream() : sendMessage()" :disabled="sendStatus !== 'streaming' && !canSend()" :class="{ 'is-stop': sendStatus === 'streaming' }" :aria-label="sendStatus === 'streaming' ? '停止' : '发送'">
-            <span x-show="sendStatus !== 'streaming'" x-html="icon('arrow-up')"></span>
-            <span x-show="sendStatus === 'streaming'" class="stop-sq" aria-hidden="true"></span>
-          </button>
+          <div class="attach-row" x-show="attachments.length">
+            <template x-for="a in attachments" :key="a.localId">
+              <div class="att-card" :class="'att-' + a.status">
+                <template x-if="a.thumbUrl"><img class="att-thumb" :src="a.thumbUrl" :alt="a.name"></template>
+                <span class="att-icon" x-show="!a.thumbUrl" x-html="icon('paperclip')"></span>
+                <div class="att-meta">
+                  <div class="att-name" x-text="a.name"></div>
+                  <div class="att-sub">
+                    <span x-text="humanSize(a.size)"></span>
+                    <span x-show="a.status === 'uploading'" x-text="' · ' + Math.round(a.progress) + '%'"></span>
+                    <span class="att-warn" x-show="a.status === 'uploaded' && a.parse_supported === false"> · 已上传,解析待后端支持</span>
+                    <span class="att-err" x-show="a.status === 'error'" x-text="' · ' + a.error"></span>
+                  </div>
+                  <div class="att-bar" x-show="a.status === 'uploading'"><div class="att-bar-fill" :style="'width:' + a.progress + '%'"></div></div>
+                </div>
+                <button class="att-retry" type="button" x-show="a.status === 'error'" @click="retryAttachment(a.localId)">重试</button>
+                <button class="att-x icon-btn" type="button" @click="removeAttachment(a.localId)" aria-label="移除" x-html="icon('x')"></button>
+              </div>
+            </template>
+          </div>
+          <div class="composer-row">
+            <button class="icon-btn attach" type="button" @click="$refs.fileInput.click()" title="添加附件" aria-label="添加附件" x-html="icon('paperclip')"></button>
+            <textarea class="composer-input" rows="1" x-model="draft" placeholder="给资金计划助手发消息…" @keydown="onComposerKeydown($event)" @input="autogrow($event)" aria-label="消息输入"></textarea>
+            <button class="send-btn" type="button" @click="sendStatus === 'streaming' ? stopStream() : sendMessage()" :disabled="sendStatus !== 'streaming' && !canSend()" :class="{ 'is-stop': sendStatus === 'streaming' }" :aria-label="sendStatus === 'streaming' ? '停止' : '发送'">
+              <span x-show="sendStatus !== 'streaming'" x-html="icon('arrow-up')"></span>
+              <span x-show="sendStatus === 'streaming'" class="stop-sq" aria-hidden="true"></span>
+            </button>
+          </div>
         </form>
       </div>
 

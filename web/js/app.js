@@ -1,13 +1,15 @@
-// app.js — Alpine 根组件:主题 + 抽屉 + 聊天(合入 chat.js);开发态装载 mock + 注入 X-User-Ctx。
+// app.js — Alpine 根组件:主题 + 抽屉 + 聊天 + 附件 + 会话历史;开发态装载 mock + 注入 X-User-Ctx。
 import { installMockSSE } from '../mock/mock-sse.js';
 import { icon } from '../vendor/lucide/icons.js';
 import { createChat } from './chat.js';
+import { createAttachments } from './attachments.js';
 import { setUserCtx } from './sse.js';
 
-installMockSSE(); // 开发态装载 mock(拦截 /chat 与 /chat/confirm)
+// 异步装载 mock:探测 /healthz,真实后端(agent-gateway)在则不装(fire-and-forget,首次发送前完成)。
+installMockSSE();
 
-// 开发态注入 X-User-Ctx(§12-D4;生产同源走 cookie/session,前端不自造权限)。
-setUserCtx({ tenant_id: 'demo-tenant', user_id: 'demo-user', roles: ['analyst'], data_scope: { regions: ['*'] } });
+// 开发态注入 X-User-Ctx(§12-D4;生产同源走 cookie/session)。对齐 contracts.UserCtx。
+setUserCtx({ tenant_id: 'demo-tenant', user_id: 'demo-user', roles: ['analyst'], data_scope: { regions: ['*'] }, permissions: ['*'] });
 
 const HLJS_THEME = {
   light: 'vendor/highlight/github.min.css',
@@ -24,9 +26,11 @@ document.addEventListener('alpine:init', () => {
     sidebarOpen: false,
     icon,
     ...createChat(),
+    ...createAttachments(),
 
     init() {
       applyHljsTheme(this.theme);
+      this.initChat(); // 恢复最近会话(刷新可回看)
     },
     toggleTheme() {
       this.theme = this.theme === 'dark' ? 'light' : 'dark';

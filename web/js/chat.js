@@ -1,13 +1,11 @@
-// chat.js — 发送/恢复轮次循环 + 消息(blocks)+ 富事件卡片 + currentRun 进展投影。
-// W2:真实 postChatStream(对 mock-sse 多场景);confirm_request/ask_user 暂停→ /chat/confirm 续传。
+// chat.js — 发送/恢复轮次循环 + 消息(blocks)+ 富事件卡片 + currentRun 投影 + 附件 + 会话历史持久化。
 import { renderMarkdown } from './markdown.js';
-import {
-  postChatStream, buildChatBody, buildConfirmBody, buildAskBody,
-} from './sse.js';
+import { postChatStream, buildChatBody, buildConfirmBody, buildAskBody } from './sse.js';
 import {
   newRun, applyPlan, applyStep, applyToolCall, applyToolResult,
   applyErrorToRun, completeRunSteps, snapshotRun, runSummaryLine, FOLD,
 } from './run.js';
+import { createConversationStore, groupByTime } from './store.js';
 
 let _seq = 0;
 const uid = (p) => `${p}-${Date.now()}-${++_seq}`;
@@ -35,54 +33,64 @@ export function createChat() {
     draft: '',
     hasMessages: false,
     sendStatus: 'idle',     // idle | streaming | error
-    currentRun: null,       // { plan, toolTimeline, focus, collapsed }
+    currentRun: null,
     sessionId: '',
-    pendingResume: null,    // { kind:'confirm'|'ask', id } | null
+    pendingResume: null,
     lastUserText: '',
     stuckToBottom: true,
     conversationTitle: '新对话',
+    conversations: [],      // 会话索引(Sidebar)
+    activeConvId: null,
     FOLD,
+    _store: createConversationStore(),
     _abort: null,
     _turnErrored: false,
 
     canSend() {
-      return this.draft.trim().length > 0 && this.sendStatus !== 'streaming';
+      if (this.sendStatus === 'streaming') return false;
+      if (this.draft.trim().length === 0) return false;
+      if (this.hasPendingUploads && this.hasPendingUploads()) return false; // 等附件上传完成
+      return true;
     },
 
     _assistant() {
       const m = this.messages[this.messages.length - 1];
       return m && m.role === 'assistant' ? m : null;
     },
-    _pushUser(text) {
-      this.messages.push({ id: uid('user'), role: 'user', raw: text });
+    _pushUser(text, attachments) {
+      this.messages.push({ id: uid('user'), role: 'user', raw: text, attachments: attachments || [], created_at: Date.now() });
     },
     _pushAssistant() {
-      this.messages.push({ id: uid('asst'), role: 'assistant', blocks: [], streaming: true });
+      this.messages.push({ id: uid('asst'), role: 'assistant', blocks: [], streaming: true, created_at: Date.now() });
       return this._assistant();
     },
 
     sendMessage() {
       const text = this.draft.trim();
       if (!text || this.sendStatus === 'streaming') return;
+      if (this.hasPendingUploads && this.hasPendingUploads()) return;
       if (!this.hasMessages) {
         this.hasMessages = true;
         this.conversationTitle = text.length > 24 ? text.slice(0, 24) + '…' : text;
       }
+      this._ensureConversation();
       this.lastUserText = text;
-      this._pushUser(text);
+      const atts = this.attachmentsSnapshot ? this.attachmentsSnapshot() : [];
+      const fileIds = this.pendingFileIds ? this.pendingFileIds() : [];
+      this._pushUser(text, atts);
+      if (this.clearAttachments) this.clearAttachments();
       this.draft = '';
       this._resetComposerHeight();
       this._pushAssistant();
       this.currentRun = newRun();
       this.stuckToBottom = true;
       this.$nextTick(() => this.scrollToBottom());
-      this._startTurn('/chat', buildChatBody(text));
+      this._startTurn('/chat', buildChatBody(text, fileIds));
     },
 
     retry() {
       if (this.sendStatus === 'streaming' || !this.lastUserText) return;
-      const am = this._assistant();
-      if (am) this.messages.pop(); // 移除尾部失败的助手消息
+      if (this._assistant()) this.messages.pop();
       this._pushAssistant();
       this.currentRun = newRun();
       this.stuckToBottom = true;
@@ -107,7 +115,7 @@ export function createChat() {
       if (result.sawDone) return this._finishDone();
       if (this.pendingResume) return this._pause();
       if (this._turnErrored) return this._finishError();
-      this._finishDone(); // 无 done 的优雅结束
+      this._finishDone();
     },
 
     _onEvent(type, data) {
@@ -150,11 +158,10 @@ export function createChat() {
       let last = am.blocks[am.blocks.length - 1];
       if (!last || last.type !== 'text' || !last.open) {
         am.blocks.push({ type: 'text', raw: '', html: '', open: true });
-        last = am.blocks[am.blocks.length - 1]; // 取响应式引用
+        last = am.blocks[am.blocks.length - 1];
       }
       last.raw += text;
     },
-
     _closeOpenText() {
       const am = this._assistant();
       if (!am) return;
@@ -163,7 +170,6 @@ export function createChat() {
         if (b.type === 'text' && b.open) { b.html = renderMarkdown(b.raw); b.open = false; }
       }
     },
-
     _normCitations(data) {
       const arr = (data && data.items) || [];
       return arr.map((c) => ({ title: c.title || c.source || '来源', source: c.source || '', ref: c.ref || c.url || '' }));
@@ -173,23 +179,23 @@ export function createChat() {
       this._closeOpenText();
       const am = this._assistant();
       if (am) am.streaming = false;
-      this.sendStatus = 'idle'; // 等待用户在卡片上操作;currentRun 保留(区暂停)
+      this.sendStatus = 'idle';
+      this._persist();
     },
-
     _finishDone() {
       this._closeOpenText();
       const am = this._assistant();
       completeRunSteps(this.currentRun);
       const snap = snapshotRun(this.currentRun);
-      if (snap && am) am.blocks.push(snap); // 留痕:计划 + 工具时间线沉入消息
+      if (snap && am) am.blocks.push(snap);
       if (am) am.streaming = false;
       this.currentRun = null;
       this.pendingResume = null;
       this.sendStatus = 'idle';
       this._abort = null;
       if (this.stuckToBottom) this.$nextTick(() => this.scrollToBottom());
+      this._persist();
     },
-
     _finishStopped() {
       this._closeOpenText();
       const am = this._assistant();
@@ -200,18 +206,17 @@ export function createChat() {
       this.pendingResume = null;
       this.sendStatus = 'idle';
       this._abort = null;
+      this._persist();
     },
-
     _finishError() {
       this._closeOpenText();
       const am = this._assistant();
       if (am) am.streaming = false;
-      // 保留 currentRun(失败步骤标红可见,设计 §7.5.1);sendStatus=error 供重试
       this.sendStatus = 'error';
       this.pendingResume = null;
       this._abort = null;
+      this._persist();
     },
-
     _onError(e) {
       const am = this._assistant();
       if (am) am.blocks.push({ type: 'error', code: (e && e.status) || 'network', message: friendlyError(e) });
@@ -220,6 +225,7 @@ export function createChat() {
       this.sendStatus = 'error';
       this.pendingResume = null;
       this._abort = null;
+      this._persist();
     },
 
     // ---- 卡片操作(恢复)----
@@ -232,12 +238,8 @@ export function createChat() {
       this.stuckToBottom = true;
       this._startTurn('/chat/confirm', buildConfirmBody(this.sessionId, confirmed));
     },
-    askPick(block, qIndex, option) {
-      block.selected[qIndex] = option;
-    },
-    askComplete(block) {
-      return block.questions.length > 0 && Object.keys(block.selected).length >= block.questions.length;
-    },
+    askPick(block, qIndex, option) { block.selected[qIndex] = option; },
+    askComplete(block) { return block.questions.length > 0 && Object.keys(block.selected).length >= block.questions.length; },
     submitAsk(block) {
       if (block.resolved || !this.askComplete(block)) return;
       block.resolved = true;
@@ -249,33 +251,18 @@ export function createChat() {
     },
 
     // ---- Composer / 停止 ----
-    stopStream() {
-      if (this._abort) this._abort.abort();
-    },
+    stopStream() { if (this._abort) this._abort.abort(); },
     onComposerKeydown(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        this.sendMessage();
-      } else if (e.key === 'Escape' && this.sendStatus === 'streaming') {
-        e.preventDefault();
-        this.stopStream();
-      }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendMessage(); }
+      else if (e.key === 'Escape' && this.sendStatus === 'streaming') { e.preventDefault(); this.stopStream(); }
     },
-    autogrow(e) {
-      const t = e.target;
-      t.style.height = 'auto';
-      t.style.height = Math.min(t.scrollHeight, 200) + 'px';
-    },
-    _resetComposerHeight() {
-      document.querySelectorAll('.composer-input').forEach((t) => { t.style.height = 'auto'; });
-    },
+    autogrow(e) { const t = e.target; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px'; },
+    _resetComposerHeight() { document.querySelectorAll('.composer-input').forEach((t) => { t.style.height = 'auto'; }); },
 
-    // ---- 进展区 / 时间线交互 ----
+    // ---- 进展区 / 时间线 ----
     toggleCollapse(o) { if (o) o.collapsed = !o.collapsed; },
     runSummary(run) { return runSummaryLine(run); },
-    stepLabel(status) {
-      return { pending: '待执行', running: '进行中', done: '完成', failed: '失败' }[status] || status;
-    },
+    stepLabel(status) { return { pending: '待执行', running: '进行中', done: '完成', failed: '失败' }[status] || status; },
     toolStatIcon(status) { return status === 'running' ? '⟳' : (status === 'failed' ? '✗' : '✓'); },
     toolOverview(t) {
       if (t.status === 'running' || t.tier === 'inline') return '';
@@ -288,14 +275,8 @@ export function createChat() {
     toolResultHtml(item) { return renderMarkdown(item.resultSummary || ''); },
 
     // ---- 滚动 / 复制 ----
-    onScroll(e) {
-      const el = e.target;
-      this.stuckToBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
-    },
-    scrollToBottom() {
-      const el = this.$refs.scroller;
-      if (el) el.scrollTop = el.scrollHeight;
-    },
+    onScroll(e) { const el = e.target; this.stuckToBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48; },
+    scrollToBottom() { const el = this.$refs.scroller; if (el) el.scrollTop = el.scrollHeight; },
     onBodyClick(e) {
       const btn = e.target.closest && e.target.closest('.copy-btn');
       if (!btn) return;
@@ -311,8 +292,61 @@ export function createChat() {
       }
     },
 
+    // ---- 会话历史(§12-D1)----
+    initChat() {
+      this.loadConversations();
+      if (this.conversations.length) this.switchConversation(this.conversations[0].id);
+    },
+    loadConversations() { this.conversations = this._store.listConversations(); },
+    convGroups() { return groupByTime(this.conversations); },
+    _ensureConversation() {
+      if (!this.activeConvId) { this.activeConvId = this._store.createConversation(this.conversationTitle).id; }
+    },
+    _persist() {
+      if (!this.activeConvId) return;
+      this._store.saveMessages(this.activeConvId, this.messages);
+      this._store.rename(this.activeConvId, this.conversationTitle);
+      this.loadConversations();
+    },
+    switchConversation(id) {
+      if (this._abort) this._abort.abort();
+      const c = this._store.getConversation(id);
+      if (!c) return;
+      this.activeConvId = id;
+      this.messages = c.messages || [];
+      this.conversationTitle = c.title || '新对话';
+      this.hasMessages = this.messages.length > 0;
+      this.currentRun = null;
+      this.pendingResume = null;
+      this.sendStatus = 'idle';
+      if (typeof window !== 'undefined' && window.innerWidth < 1024) this.sidebarOpen = false;
+      this.$nextTick(() => this.scrollToBottom());
+    },
+    renameConversation(id) {
+      const cur = this.conversations.find((c) => c.id === id);
+      const name = window.prompt('重命名会话', cur ? cur.title : '');
+      if (name && name.trim()) {
+        this._store.rename(id, name.trim());
+        if (id === this.activeConvId) this.conversationTitle = name.trim();
+        this.loadConversations();
+      }
+    },
+    deleteConversation(id) {
+      if (!window.confirm('删除该会话?此操作不可恢复。')) return;
+      this._store.remove(id);
+      if (id === this.activeConvId) this.newConversation();
+      this.loadConversations();
+    },
+    clearHistory() {
+      if (!window.confirm('清除全部本地会话历史?此操作不可恢复。')) return;
+      this._store.clearAll();
+      this.newConversation();
+      this.loadConversations();
+    },
+
     newConversation() {
       if (this._abort) this._abort.abort();
+      if (this.clearAttachments) this.clearAttachments();
       this.messages = [];
       this.hasMessages = false;
       this.sendStatus = 'idle';
@@ -320,9 +354,10 @@ export function createChat() {
       this.pendingResume = null;
       this.draft = '';
       this.sessionId = '';
+      this.activeConvId = null;
       this.conversationTitle = '新对话';
       this._resetComposerHeight();
-      if (window.innerWidth < 1024) this.sidebarOpen = false;
+      if (typeof window !== 'undefined' && window.innerWidth < 1024) this.sidebarOpen = false;
     },
   };
 }
