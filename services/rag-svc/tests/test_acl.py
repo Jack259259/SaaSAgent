@@ -48,3 +48,25 @@ def test_chunk_allowed_tenant_and_tag() -> None:
     assert acl.chunk_allowed(acme, tenant_id=None, acl_tags=["public"]) is True  # 全局
     # 本租户但标签不可见(internal)→ 标签维度仍生效
     assert acl.chunk_allowed(acme, tenant_id="t_acme", acl_tags=["internal"]) is False
+
+
+# ---- 组合边界补强(W4):多标签并集语义 / 多角色并集 / 租户闸优先 --------------- #
+def test_multi_tag_visible_when_any_tag_granted() -> None:
+    # 标签维度是"任一命中即可见"(并集语义,见 acl 模块说明):
+    # 同时标 internal+public 的片段,对仅有 public 授予的用户仍可见(经 public 命中)。
+    tenant = _uc(["tenant_user"])
+    assert acl.chunk_visible(tenant, ["internal", "public"]) is True
+    assert acl.chunk_visible(tenant, ["internal"]) is False  # 仅 internal 则不可见
+
+
+def test_multi_role_union_grants_internal() -> None:
+    # 多角色取并集:含任一内部角色即获 internal 授予。
+    combined = _uc(["tenant_user", "internal_dev"])
+    assert acl.granted_tags(combined) == {"public", "tenant", "internal"}
+
+
+def test_cross_tenant_blocked_even_when_tag_granted() -> None:
+    # 内部用户对他租户私有片段:标签可见,但租户闸先拦(红线 9 优先于标签维度)。
+    internal_user = _uc(["internal_support"], tenant="t_self")
+    assert acl.chunk_allowed(internal_user, tenant_id="t_other", acl_tags=["internal"]) is False
+    assert acl.chunk_allowed(internal_user, tenant_id="t_self", acl_tags=["internal"]) is True
