@@ -105,13 +105,31 @@ a{color:var(--accent);}
 .msg-user{justify-content:flex-end;}
 .msg-user .msg-inner{max-width:85%;}
 .msg-assistant .msg-inner{width:100%;}
-.msg-body{word-break:break-word;}
+.msg-body{word-break:break-word;user-select:text;-webkit-user-select:text;}
 .user-body{
   background:var(--bubble-user);padding:var(--space-3) var(--space-4);
-  border-radius:var(--radius-lg);white-space:pre-wrap;
+  border-radius:var(--radius-lg);white-space:pre-wrap;user-select:text;-webkit-user-select:text;
 }
-.assistant-body{padding:var(--space-1) 0;}
-.stream-text{white-space:pre-wrap;}
+.assistant-body{padding:var(--space-1) 0;user-select:text;-webkit-user-select:text;}
+.stream-text{white-space:pre-wrap;user-select:text;-webkit-user-select:text;}
+.md{user-select:text;-webkit-user-select:text;}
+.user-text{user-select:text;-webkit-user-select:text;}
+
+/* 消息操作栏(hover 浮现,参考 DeepSeek) */
+.msg-actions{
+  display:flex;align-items:center;gap:var(--space-1);
+  margin-top:2px;opacity:0;transition:opacity .15s;
+}
+.msg:hover .msg-actions,.block:hover .msg-actions{opacity:1;}
+.msg-copy-btn{
+  font-size:var(--text-xs);color:var(--text-muted);
+  padding:2px 6px;border-radius:var(--radius-sm);
+  display:inline-flex;align-items:center;gap:4px;
+  background:none;border:none;cursor:pointer;
+  transition:background .15s,color .15s;
+}
+.msg-copy-btn:hover{background:var(--surface-2);color:var(--text);}
+.msg-copy-btn svg{width:14px;height:14px;}
 
 /* typing cursor */
 .cursor{

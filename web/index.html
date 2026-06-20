@@ -180,6 +180,11 @@
                       </template>
                     </div>
                   </div>
+                  <div class="msg-actions" x-show="m.role === 'user'">
+                    <button class="msg-copy-btn" type="button" @click="copyMessage($event, m)" aria-label="复制提问">
+                      <span x-html="icon('copy')"></span><span>复制</span>
+                    </button>
+                  </div>
 
                   <!-- 助手:blocks -->
                   <template x-if="m.role === 'assistant'">
@@ -190,6 +195,11 @@
                             <div class="msg-body assistant-body" @click="onBodyClick($event)">
                               <span class="stream-text" x-show="b.open" x-text="b.raw"></span><span class="cursor" x-show="b.open && m.streaming" aria-hidden="true"></span>
                               <div class="md" x-show="!b.open" x-html="b.html"></div>
+                            </div>
+                            <div class="msg-actions" x-show="!b.open">
+                              <button class="msg-copy-btn" type="button" @click="copyMessage($event, m)" aria-label="复制回答">
+                                <span x-html="icon('copy')"></span><span>复制</span>
+                              </button>
                             </div>
                           </template>
                           <template x-if="b.type === 'confirm'">

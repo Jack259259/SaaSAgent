@@ -1,5 +1,6 @@
 // chat.js — 发送/恢复轮次循环 + 消息(blocks)+ 富事件卡片 + currentRun 投影 + 附件 + 会话历史持久化。
 import { renderMarkdown } from './markdown.js';
+import { icon } from '../vendor/lucide/icons.js';
 import { postChatStream, buildChatBody, buildConfirmBody, buildAskBody } from './sse.js';
 import {
   newRun, applyPlan, applyStep, applyToolCall, applyToolResult,
@@ -124,7 +125,7 @@ export function createChat() {
       switch (type) {
         case 'plan': applyPlan(this.currentRun, data); break;
         case 'step': applyStep(this.currentRun, data); break;
-        case 'tool_call': applyToolCall(this.currentRun, data); break;
+        case 'tool_call': this._closeOpenText(); applyToolCall(this.currentRun, data); break;
         case 'tool_result_summary': applyToolResult(this.currentRun, data); break;
         case 'answer_delta': this._appendAnswer(data.text || ''); break;
         case 'confirm_request':
@@ -170,9 +171,27 @@ export function createChat() {
         if (b.type === 'text' && b.open) { b.html = renderMarkdown(b.raw); b.open = false; }
       }
     },
+    /**
+     * citation.ref 协议白名单(FB-1)。citation 来源是检索内容,按红线 7 不可信,且经 :href 直绑
+     * 绕过 DOMPurify。仅放行 http(s)/相对路径/锚点;javascript:/data:/vbscript: 等一律归 '#'。
+     */
+    safeHref(url) {
+      const s = String(url == null ? '' : url).trim();
+      if (!s) return '#';
+      if (s[0] === '#' || s[0] === '/') return s; // 锚点 / 绝对或协议相对路径(导航,非执行)
+      const stripped = s.replace(/[\u0000-\u0020]+/g, ''); // 去控制字符/空白,防 java\tscript: 绕过
+      if (/^https?:\/\//i.test(stripped)) return s; // 仅 http(s) 显式协议放行
+      if (/^[a-z][a-z0-9+.-]*:/i.test(stripped)) return '#'; // 其余任何协议拒
+      return s; // 无协议的相对引用放行
+    },
+
     _normCitations(data) {
       const arr = (data && data.items) || [];
-      return arr.map((c) => ({ title: c.title || c.source || '来源', source: c.source || '', ref: c.ref || c.url || '' }));
+      return arr.map((c) => ({
+        title: c.title || c.source || '来源',
+        source: c.source || '',
+        ref: this.safeHref(c.ref || c.url || ''),
+      }));
     },
 
     _pause() {
@@ -289,6 +308,43 @@ export function createChat() {
       else {
         const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
         try { document.execCommand('copy'); ok(); } catch (e2) { /* ignore */ } finally { ta.remove(); }
+      }
+    },
+
+    /** 提取整段消息的可复制纯文本（用户提问取 raw;助手回答拼接 text 块,跳过卡片/引用）。 */
+    copyTextOf(msg) {
+      if (msg.role === 'user') return msg.raw || '';
+      return (msg.blocks || [])
+        .filter(b => b.type === 'text')
+        .map(b => b.raw || '')
+        .join('\n');
+    },
+
+    /** 复制整段消息文本（用户提问 / 助手回答）。 */
+    copyMessage(e, msg) {
+      const text = this.copyTextOf(msg);
+      const btn = e.target.closest('.msg-copy-btn');
+      if (!btn) return;
+      const iconEl = btn.querySelector('span:first-child');
+      const labelEl = btn.querySelector('span:last-child');
+      const origHTML = iconEl ? iconEl.innerHTML : '';
+      const origLabel = labelEl ? labelEl.textContent : '复制';
+      const ok = () => {
+        if (iconEl) iconEl.innerHTML = icon('check');
+        if (labelEl) labelEl.textContent = '已复制';
+        setTimeout(() => {
+          if (iconEl) iconEl.innerHTML = origHTML;
+          if (labelEl) labelEl.textContent = origLabel;
+        }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(ok).catch(() => {});
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); ok(); } catch (e2) { /* ignore */ }
+        finally { ta.remove(); }
       }
     },
 
