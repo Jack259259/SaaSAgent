@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import AsyncIterator, Callable, Iterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -77,11 +77,6 @@ class Budget:
     max_steps: int = 8
     max_cost: float = 5.0
     max_tokens: int | None = None  # None=不限;子 Agent 用它做独立 token 预算(§5.1)
-
-
-def _chunks(text: str, n: int) -> Iterator[str]:
-    for i in range(0, len(text), n):
-        yield text[i : i + n]
 
 
 def _build_plan(args: dict[str, Any], prev: Plan | None) -> Plan:
@@ -245,6 +240,8 @@ class Orchestrator:
                 session.phase = "done"
                 return
 
+            # 决策轮非流式:前导推理经 step 事件呈现,不混入 answer_delta
+            # (契约 sse-protocol.md:answer_delta = 最终回答;工具轮前导 → step)。
             response = await self._run_turn(session.messages)
             session.used_cost += response.usage.cost_usd
             session.used_tokens += response.usage.input_tokens + response.usage.output_tokens
@@ -331,9 +328,11 @@ class Orchestrator:
                     return
                 continue
 
-            # 无工具调用 → 直接作答(简单任务)
-            for chunk in _chunks(response.text or "(无内容)", _ANSWER_CHUNK):
-                yield AnswerDeltaEvent(chunk)
+            # 无工具调用 → 直接作答(简单任务):此轮即最终回答,分段流出。
+            # 契约 sse-protocol.md:answer_delta = 最终回答(工具轮前导走 step)。
+            answer = response.text or "(无内容)"
+            for i in range(0, len(answer), _ANSWER_CHUNK):
+                yield AnswerDeltaEvent(answer[i : i + _ANSWER_CHUNK])
             yield DoneEvent(stop_reason="end_turn", used_steps=session.used_steps)
             session.phase = "done"
             return
@@ -494,9 +493,15 @@ class Orchestrator:
             return
         prompt = f"请综合各步骤产物作答。\n{self._workspace_brief(session)}"
         messages = [*session.messages, Message(role=Role.user, content=[TextBlock(prompt)])]
-        response = await self._run_turn(messages)
-        for chunk in _chunks(response.text or "(无结论)", _ANSWER_CHUNK):
-            yield AnswerDeltaEvent(chunk)
+        response: LlmResponse | None = None
+        async for item in self._stream_turn(messages):
+            if isinstance(item, LlmResponse):
+                response = item
+            else:
+                yield item
+        assert response is not None  # _stream_turn 末项必为 LlmResponse
+        if not response.text:
+            yield AnswerDeltaEvent("(无结论)")
         yield DoneEvent(stop_reason="completed", used_steps=session.used_steps)
         session.phase = "done"
 
@@ -538,6 +543,7 @@ class Orchestrator:
         return items
 
     async def _run_turn(self, messages: Sequence[Message]) -> LlmResponse:
+        """非流式:收集完整 LLM 回复(供 _exec_step / _replan 等内部调用)。"""
         tool_defs = [*self._registry.tool_defs(), *self._intercept_defs]
         response: LlmResponse | None = None
         system = self._system_prompt() if self._system_prompt is not None else build_system_prompt()
@@ -549,6 +555,26 @@ class Orchestrator:
         if response is None:
             raise RuntimeError("provider.stream 未产生 StreamDone")
         return response
+
+    async def _stream_turn(
+        self, messages: Sequence[Message]
+    ) -> AsyncIterator[AnswerDeltaEvent | LlmResponse]:
+        """流式:逐 token 产出 AnswerDeltaEvent,最后一项产出完整 LlmResponse。
+
+        async generator 不能 `return 值`(StopAsyncIteration 不带 value);故把最终
+        LlmResponse 作为流的**末项**产出,调用方按类型区分取回。
+        """
+        tool_defs = [*self._registry.tool_defs(), *self._intercept_defs]
+        response: LlmResponse | None = None
+        system = self._system_prompt() if self._system_prompt is not None else build_system_prompt()
+        async for ev in self._provider.stream(system=system, messages=messages, tools=tool_defs):
+            if isinstance(ev, TextDelta):
+                yield AnswerDeltaEvent(ev.text)
+            elif isinstance(ev, StreamDone):
+                response = ev.response
+        if response is None:
+            raise RuntimeError("provider.stream 未产生 StreamDone")
+        yield response
 
     async def _exec_tool(
         self, call: ToolUseBlock, ctx: ToolContext, who: AuditWho, trace_id: str
