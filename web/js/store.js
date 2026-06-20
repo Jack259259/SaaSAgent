@@ -22,6 +22,9 @@ function sanitizeMessage(m) {
   } else {
     out.blocks = JSON.parse(JSON.stringify(m.blocks || [])); // 纯数据;丢弃函数/瞬时
     out.streaming = false;
+    if (m.vote === 'up' || m.vote === 'down') out.vote = m.vote; // 点赞点踩持久化(刷新不丢)
+    if (m.feedbackComment) out.feedbackComment = String(m.feedbackComment).slice(0, 500);
+    // showComment 为瞬时 UI 态,不持久化
   }
   return out;
 }

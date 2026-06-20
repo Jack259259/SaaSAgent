@@ -180,10 +180,10 @@
                       </template>
                     </div>
                   </div>
-                  <div class="msg-actions" x-show="m.role === 'user'">
-                    <button class="msg-copy-btn" type="button" @click="copyMessage($event, m)" aria-label="复制提问">
-                      <span x-html="icon('copy')"></span><span>复制</span>
-                    </button>
+                  <div class="msg-action-bar user-actions" x-show="m.role === 'user' && editingId !== m.id">
+                    <button class="act-btn" type="button" title="复制" aria-label="复制提问" @click="copyMessage($event, m, 'text')"><span class="act-ico" x-html="icon('copy')"></span></button>
+                    <button class="act-btn" type="button" title="编辑" aria-label="编辑提问" @click="editMessage(m)"><span class="act-ico" x-html="icon('pencil')"></span></button>
+                    <button class="act-btn" type="button" title="重试" aria-label="重试该提问" @click="retryUserMessage(m)"><span class="act-ico" x-html="icon('refresh-cw')"></span></button>
                   </div>
 
                   <!-- 助手:blocks -->
@@ -195,11 +195,6 @@
                             <div class="msg-body assistant-body" @click="onBodyClick($event)">
                               <span class="stream-text" x-show="b.open" x-text="b.raw"></span><span class="cursor" x-show="b.open && m.streaming" aria-hidden="true"></span>
                               <div class="md" x-show="!b.open" x-html="b.html"></div>
-                            </div>
-                            <div class="msg-actions" x-show="!b.open">
-                              <button class="msg-copy-btn" type="button" @click="copyMessage($event, m)" aria-label="复制回答">
-                                <span x-html="icon('copy')"></span><span>复制</span>
-                              </button>
                             </div>
                           </template>
                           <template x-if="b.type === 'confirm'">
@@ -296,6 +291,21 @@
                           </template>
                         </div>
                       </template>
+                      <!-- 模型回复操作栏:整条一栏,完成后显示(对齐 claude.ai)-->
+                      <div class="msg-action-bar asst-actions" x-show="!m.streaming && hasTextBlock(m)">
+                        <button class="act-btn" type="button" title="复制" aria-label="复制回答（纯文本）" @click="copyMessage($event, m, 'text')"><span class="act-ico" x-html="icon('copy')"></span></button>
+                        <button class="act-btn" type="button" title="复制 Markdown 源" aria-label="复制回答（Markdown 源）" @click="copyMessage($event, m, 'md')"><span class="act-ico act-md">Md</span></button>
+                        <button class="act-btn" type="button" title="赞" aria-label="点赞" :class="{ on: m.vote === 'up' }" :aria-pressed="m.vote === 'up'" @click="setVote(m, 'up')"><span class="act-ico" x-html="icon('thumbs-up')"></span></button>
+                        <button class="act-btn" type="button" title="踩" aria-label="点踩" :class="{ on: m.vote === 'down' }" :aria-pressed="m.vote === 'down'" @click="setVote(m, 'down')"><span class="act-ico" x-html="icon('thumbs-down')"></span></button>
+                        <button class="act-btn" type="button" title="重新生成" aria-label="重新生成回答" @click="retryAssistant(m)"><span class="act-ico" x-html="icon('refresh-cw')"></span></button>
+                      </div>
+                      <div class="feedback-box" x-show="m.showComment">
+                        <textarea class="feedback-input" rows="2" maxlength="500" x-model="m.feedbackComment" placeholder="可选:这条回答哪里不好?(可跳过)" aria-label="反馈意见"></textarea>
+                        <div class="feedback-actions">
+                          <button class="btn sm" type="button" @click="submitFeedbackComment(m)">提交</button>
+                          <button class="btn sm ghost" type="button" @click="cancelFeedbackComment(m)">跳过</button>
+                        </div>
+                      </div>
                     </div>
                   </template>
 
@@ -309,6 +319,11 @@
       <!-- 底部 Composer -->
       <div class="composer-bar" x-show="hasMessages">
         <form class="composer" @submit.prevent="sendMessage()">
+          <div class="edit-hint" x-show="editingId">
+            <span class="act-ico" x-html="icon('pencil')"></span>
+            <span>编辑中,发送将覆盖此后内容</span>
+            <button class="link-btn" type="button" @click="cancelMessageEdit()">取消</button>
+          </div>
           <div class="attach-row" x-show="attachments.length">
             <template x-for="a in attachments" :key="a.localId">
               <div class="att-card" :class="'att-' + a.status">

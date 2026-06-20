@@ -50,3 +50,12 @@ API(对齐设计 §8.5.4):
 - **入库策略按 D5**:落**草稿态**(draft),经审核转 active;不让任意上传即时生效(Skill 正文进 LLM 上下文,是提示注入面)。
 
 **治理(后端红线 10)**:`assets/skills/` 的任何改动必须过 schema 校验 + 对应评估回归 + git 版本化与评审后方可合并;写 API 应落入此治理流(草稿 → 审核 → 生效),而非直接改生效库。
+
+## F. 消息反馈(点赞 / 点踩 · 操作栏)
+
+前端「消息操作栏」(`web/js/chat.js`)对模型回复支持**点赞 / 点踩**(互斥 toggle,再点取消)+ 点踩后**可选意见**(≤500 字);vote/意见**持久化于会话历史**(localStorage,刷新不丢)。**反馈上报端点后端待补**:
+
+- **`POST /feedback` → `{ ok: true }`**,请求体 `{ message_id, session_id?, trace_id?, vote: "up"|"down"|null, comment? }`。
+  - **当前前端 `feedbackEndpoint=null` → 仅本地暂存**(`localStorage.fp_feedback_queue`),**不发网络请求**(避免对不存在端点 POST 产生控制台错误,亦免脏请求)。端点就绪后将 `feedbackEndpoint` 置 `'/feedback'`:改走网络上报 + 失败回退暂存,登录后可批量回放暂存队列。
+  - **`trace_id` 目前 SSE 未暴露**(见 §C):前端暂以 `message_id` + `session_id` 标识;后端若在 `done` 事件 / 响应头暴露 `trace_id`,前端将一并上报以贯穿可观测链路(Langfuse)。
+  - 鉴权同 `/chat`(同源 cookie/session 或 `X-User-Ctx`);**按租户隔离存储,反馈数据不跨租户**(红线 9)。意见为用户输入,后端入库前应做长度/注入防护。

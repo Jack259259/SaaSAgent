@@ -6,6 +6,7 @@
   <title>selftest · web 前端自检</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%230d9488'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="../styles/tokens.css">
+  <link rel="stylesheet" href="../styles/app.css">
   <!-- 第三方库(UMD 全局),供 renderMarkdown 断言使用 -->
   <script src="../vendor/marked/marked.min.js"></script>
   <script src="../vendor/highlight/highlight.min.js"></script>
@@ -328,6 +329,86 @@
     assert('xss: citation ref data:/vbscript: → #', _cCite.safeHref('data:text/html,<x>') === '#' && _cCite.safeHref('vbscript:msgbox(1)') === '#');
     assert('safe: citation ref http(s)/相对/锚点/空 放行', _cCite.safeHref('https://x/') === 'https://x/' && _cCite.safeHref('/p') === '/p' && _cCite.safeHref('#a') === '#a' && _cCite.safeHref('') === '#');
     assert('proj: _normCitations 经 safeHref 净化 ref', _cCite._normCitations({ items: [{ title: 'T', ref: 'javascript:alert(1)' }] })[0].ref === '#' && _cCite._normCitations({ items: [{ title: 'T', source: 'S', ref: 'https://ok/' }] })[0].ref === 'https://ok/');
+
+    // ===== 消息操作栏:复制纯文本/Md 源、点赞点踩、反馈暂存、编辑/重试截断 =====
+    const _cAct = createChat();
+    assert('act: messageText 用户取 raw', _cAct.messageText({ role: 'user', raw: '问' }) === '问');
+    assert('act: messageText 助手去标记 + 排除非 text 块', _cAct.messageText({ role: 'assistant', blocks: [
+      { type: 'text', html: '<p><strong>粗</strong>体</p>', raw: '**粗**体' },
+      { type: 'run' }, { type: 'citation', items: [] },
+      { type: 'text', html: '<p>第二段</p>', raw: '第二段' },
+    ] }) === '粗体\n\n第二段');
+    assert('act: messageText 流式无 html 回退 raw', _cAct.messageText({ role: 'assistant', blocks: [{ type: 'text', raw: 'streaming…' }] }) === 'streaming…');
+    assert('act: messageMarkdown 取 raw 源', _cAct.messageMarkdown({ role: 'assistant', blocks: [
+      { type: 'text', raw: '**A**' }, { type: 'citation' }, { type: 'text', raw: 'B' },
+    ] }) === '**A**\n\nB');
+
+    const _origFetch = window.fetch;
+    window.fetch = () => Promise.resolve({ ok: true }); // 隔离网络:vote 上报不落 404 暂存
+    const _mv = { id: 'mv', role: 'assistant', blocks: [] };
+    _cAct.activeConvId = null; // _persist 早返回
+    _cAct.setVote(_mv, 'up');   assert('act: vote up', _mv.vote === 'up' && _mv.showComment === false);
+    _cAct.setVote(_mv, 'up');   assert('act: vote 再点同一个取消', _mv.vote === null);
+    _cAct.setVote(_mv, 'down'); assert('act: vote down 浮现意见框', _mv.vote === 'down' && _mv.showComment === true);
+    _cAct.setVote(_mv, 'up');   assert('act: vote down→up 互斥 + 收起意见框', _mv.vote === 'up' && _mv.showComment === false);
+    window.fetch = _origFetch;
+
+    try { localStorage.removeItem('fp_feedback_queue'); } catch (e) {}
+    _cAct._stashFeedback({ message_id: 'mv', vote: 'down', comment: 'x' });
+    assert('act: 反馈失败落 localStorage 队列', (JSON.parse(localStorage.getItem('fp_feedback_queue') || '[]')).some((r) => r.message_id === 'mv' && r.vote === 'down'));
+
+    const _stV = createConversationStore();
+    const _cvV = _stV.createConversation('v');
+    _stV.saveMessages(_cvV.id, [{ id: 'a', role: 'assistant', blocks: [{ type: 'text', raw: 'x', html: '<p>x</p>' }], vote: 'up', feedbackComment: '不错', showComment: true }]);
+    const _gotV = _stV.getConversation(_cvV.id).messages[0];
+    assert('act: vote/comment 持久化复原', _gotV.vote === 'up' && _gotV.feedbackComment === '不错');
+    assert('act: showComment 瞬时态不持久化', _gotV.showComment === undefined);
+
+    const _mkT = () => { const c = createChat(); c.scrollToBottom = () => {}; c.$nextTick = (fn) => fn && fn(); c.activeConvId = null; c._resetComposerHeight = () => {}; c._startTurn = function (url, body) { this._lastStart = { url, body }; }; return c; };
+    const _cR = _mkT();
+    _cR.messages = [
+      { id: 'u1', role: 'user', raw: '问一', attachments: [] },
+      { id: 'a1', role: 'assistant', blocks: [{ type: 'text', raw: '答一' }], streaming: false },
+      { id: 'u2', role: 'user', raw: '问二', attachments: [] },
+      { id: 'a2', role: 'assistant', blocks: [{ type: 'text', raw: '答二' }], streaming: false },
+    ];
+    _cR.retryUserMessage(_cR.messages[0]);
+    assert('act: retryUserMessage 截断其后 + 重发该问', _cR.messages.length === 2 && _cR.messages[0].id === 'u1' && _cR.messages[1].role === 'assistant' && /问一/.test(JSON.stringify(_cR._lastStart.body)));
+
+    const _cR2 = _mkT();
+    _cR2.messages = [
+      { id: 'u1', role: 'user', raw: 'A', attachments: [] },
+      { id: 'a1', role: 'assistant', blocks: [{ type: 'text', raw: 'ra' }], streaming: false },
+      { id: 'u2', role: 'user', raw: 'B', attachments: [] },
+      { id: 'a2', role: 'assistant', blocks: [{ type: 'text', raw: 'rb' }], streaming: false },
+    ];
+    _cR2.retryAssistant(_cR2.messages[3]);
+    assert('act: retryAssistant 定位前一条 user 截断重发', _cR2.messages.length === 4 && _cR2.messages[2].id === 'u2' && _cR2.messages[3].role === 'assistant' && /B/.test(JSON.stringify(_cR2._lastStart.body)));
+
+    const _cE = _mkT();
+    _cE.messages = [
+      { id: 'u1', role: 'user', raw: '旧问', attachments: [] },
+      { id: 'a1', role: 'assistant', blocks: [], streaming: false },
+    ];
+    _cE.editMessage(_cE.messages[0]);
+    assert('act: editMessage 载入 composer + 编辑态', _cE.draft === '旧问' && _cE.editingId === 'u1');
+    _cE.draft = '新问'; _cE.hasMessages = true;
+    _cE.sendMessage();
+    assert('act: 编辑覆盖重发 = 替换文本 + 截断 + 重发', _cE.messages[0].raw === '新问' && _cE.messages.length === 2 && _cE.editingId === null && /新问/.test(JSON.stringify(_cE._lastStart.body)));
+
+    // 样式锁(防本次改动回退):正文 user-select=text;操作按钮 user-select=none
+    const _probe = document.createElement('div');
+    _probe.innerHTML = '<div class="msg-body assistant-body"><div class="md">x</div></div><div class="msg-body user-body"><div class="user-text">y</div></div><div class="msg-action-bar"><button class="act-btn"><span class="act-ico">i</span></button></div>';
+    document.body.appendChild(_probe);
+    assert('select: 助手正文 user-select=text', getComputedStyle(_probe.querySelector('.assistant-body')).userSelect === 'text');
+    assert('select: 用户正文 user-select=text', getComputedStyle(_probe.querySelector('.user-body')).userSelect === 'text');
+    assert('select: 操作按钮 user-select=none', getComputedStyle(_probe.querySelector('.act-btn')).userSelect === 'none');
+    _probe.remove();
+
+    // 合并防撞:chat 新方法不得与 skills 同名(同根组件 ...spread 合并会互相覆盖,见 app.js)
+    const _skillKeys = new Set(Object.keys(createSkills()));
+    const _chatNew = ['editMessage', 'cancelMessageEdit', 'setVote', 'submitFeedbackComment', 'cancelFeedbackComment', 'retryUserMessage', 'retryAssistant', 'copyMessage', 'messageText', 'messageMarkdown', 'hasTextBlock'];
+    assert('merge: chat 新方法不与 skills 同名(防合并覆盖)', _chatNew.every((k) => !_skillKeys.has(k)));
 
     // ===== 渲染结果 =====
     const passed = results.filter((r) => r.ok).length;

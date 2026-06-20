@@ -42,6 +42,8 @@ export function createChat() {
     conversationTitle: '新对话',
     conversations: [],      // 会话索引(Sidebar)
     activeConvId: null,
+    editingId: null,        // 正在编辑的用户消息 id(null=普通发送)
+    feedbackEndpoint: null, // 反馈上报端点(后端就绪后置 '/feedback';null=仅本地暂存,见 backend-gaps §F)
     FOLD,
     _store: createConversationStore(),
     _abort: null,
@@ -70,23 +72,44 @@ export function createChat() {
       const text = this.draft.trim();
       if (!text || this.sendStatus === 'streaming') return;
       if (this.hasPendingUploads && this.hasPendingUploads()) return;
+      if (this.editingId) return this._sendEdit(text);
       if (!this.hasMessages) {
         this.hasMessages = true;
         this.conversationTitle = text.length > 24 ? text.slice(0, 24) + '…' : text;
       }
       this._ensureConversation();
-      this.lastUserText = text;
       const atts = this.attachmentsSnapshot ? this.attachmentsSnapshot() : [];
       const fileIds = this.pendingFileIds ? this.pendingFileIds() : [];
       this._pushUser(text, atts);
       if (this.clearAttachments) this.clearAttachments();
       this.draft = '';
       this._resetComposerHeight();
+      this._beginAssistantTurn(text, fileIds);
+    },
+
+    /** 推入助手占位并起一轮(发送/编辑/重试共用)。 */
+    _beginAssistantTurn(text, fileIds) {
+      this.lastUserText = text;
       this._pushAssistant();
       this.currentRun = newRun();
       this.stuckToBottom = true;
       this.$nextTick(() => this.scrollToBottom());
-      this._startTurn('/chat', buildChatBody(text, fileIds));
+      this._startTurn('/chat', buildChatBody(text, fileIds || []));
+    },
+
+    /** 编辑覆盖重发(D:截断该消息之后所有轮次,从编辑后的文本重生成)。 */
+    _sendEdit(text) {
+      const id = this.editingId;
+      this.editingId = null;
+      const i = this.messages.findIndex((m) => m.id === id);
+      if (i < 0) { this.draft = ''; this._resetComposerHeight(); return; }
+      const target = this.messages[i];
+      target.raw = text;
+      target.created_at = Date.now();
+      this._truncateAfter(i);            // 覆盖:丢弃该用户消息之后的所有轮次
+      this.draft = '';
+      this._resetComposerHeight();
+      this._beginAssistantTurn(text, this._fileIdsOf(target));
     },
 
     retry() {
@@ -311,7 +334,7 @@ export function createChat() {
       }
     },
 
-    /** 提取整段消息的可复制纯文本（用户提问取 raw;助手回答拼接 text 块,跳过卡片/引用）。 */
+    /** 助手 text 块的 Markdown 源拼接(保留,供既有断言;复制 Md 源亦用 messageMarkdown)。 */
     copyTextOf(msg) {
       if (msg.role === 'user') return msg.raw || '';
       return (msg.blocks || [])
@@ -320,33 +343,136 @@ export function createChat() {
         .join('\n');
     },
 
-    /** 复制整段消息文本（用户提问 / 助手回答）。 */
-    copyMessage(e, msg) {
-      const text = this.copyTextOf(msg);
-      const btn = e.target.closest('.msg-copy-btn');
-      if (!btn) return;
-      const iconEl = btn.querySelector('span:first-child');
-      const labelEl = btn.querySelector('span:last-child');
-      const origHTML = iconEl ? iconEl.innerHTML : '';
-      const origLabel = labelEl ? labelEl.textContent : '复制';
-      const ok = () => {
-        if (iconEl) iconEl.innerHTML = icon('check');
-        if (labelEl) labelEl.textContent = '已复制';
-        setTimeout(() => {
-          if (iconEl) iconEl.innerHTML = origHTML;
-          if (labelEl) labelEl.textContent = origLabel;
-        }, 1500);
-      };
+    /**
+     * 该消息的可复制**纯文本**(默认):用户取 raw;助手仅拼接 text 块的**渲染后纯文本**
+     * (去 Markdown 标记),**排除**进展区/工具时间线/confirm/ask/citation/error/note 等 UI。
+     */
+    messageText(msg) {
+      if (!msg) return '';
+      if (msg.role === 'user') return msg.raw || '';
+      return (msg.blocks || [])
+        .filter((b) => b.type === 'text')
+        .map((b) => {
+          if (b.html && typeof document !== 'undefined') {
+            const el = document.createElement('div');
+            el.innerHTML = b.html; // html 已经 DOMPurify 消毒,仅取 textContent
+            return (el.textContent || '').trim();
+          }
+          return (b.raw || '').trim();
+        })
+        .filter(Boolean)
+        .join('\n\n');
+    },
+    /** 该消息的 **Markdown 源**(可选复制):仅拼接 text 块的 raw。 */
+    messageMarkdown(msg) {
+      if (!msg) return '';
+      if (msg.role === 'user') return msg.raw || '';
+      return (msg.blocks || []).filter((b) => b.type === 'text').map((b) => b.raw || '').join('\n\n');
+    },
+
+    /** 复制整段消息(mode='md' 复制 Markdown 源,否则纯文本);按钮短暂反馈"已复制"。 */
+    copyMessage(e, msg, mode) {
+      const text = mode === 'md' ? this.messageMarkdown(msg) : this.messageText(msg);
+      const btn = (e && (e.currentTarget || (e.target && e.target.closest && e.target.closest('.act-btn')))) || null;
+      this._writeClipboard(text, () => this._flashCopied(btn));
+    },
+    _writeClipboard(text, ok) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(ok).catch(() => {});
       } else {
         const ta = document.createElement('textarea');
         ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
         document.body.appendChild(ta); ta.select();
-        try { document.execCommand('copy'); ok(); } catch (e2) { /* ignore */ }
-        finally { ta.remove(); }
+        try { document.execCommand('copy'); ok(); } catch (e2) { /* ignore */ } finally { ta.remove(); }
       }
     },
+    _flashCopied(btn) {
+      if (!btn) return;
+      const ico = btn.querySelector('.act-ico');
+      const origHtml = ico ? ico.innerHTML : '';
+      const origTitle = btn.getAttribute('title') || '';
+      if (ico) ico.innerHTML = icon('check');
+      btn.classList.add('copied'); btn.setAttribute('title', '已复制');
+      setTimeout(() => {
+        if (ico) ico.innerHTML = origHtml;
+        btn.classList.remove('copied'); btn.setAttribute('title', origTitle);
+      }, 1500);
+    },
+
+    // ---- 消息操作:点赞点踩 / 反馈 / 编辑 / 重试(截断重生成)----
+    /** 点赞点踩互斥 toggle(再点同一个=取消)。点踩浮出意见框。 */
+    setVote(msg, vote) {
+      if (!msg) return;
+      msg.vote = (msg.vote === vote) ? null : vote;
+      msg.showComment = (msg.vote === 'down');
+      this._postFeedback(msg);
+      this._persist();
+    },
+    submitFeedbackComment(msg) {
+      if (!msg) return;
+      msg.feedbackComment = (msg.feedbackComment || '').trim().slice(0, 500);
+      msg.showComment = false;
+      this._postFeedback(msg);
+      this._persist();
+    },
+    cancelFeedbackComment(msg) { if (msg) msg.showComment = false; },
+    /**
+     * 上报反馈。后端 /feedback 端点尚未实现(backend-gaps §F):默认**仅本地暂存**(localStorage),
+     * 不发网络请求(避免对不存在端点 POST 产生控制台错误)。端点就绪后置 `feedbackEndpoint`,
+     * 改走网络上报 + 失败回退暂存。
+     */
+    _postFeedback(msg) {
+      const payload = { message_id: msg.id, session_id: this.sessionId || null, vote: msg.vote || null };
+      const c = (msg.feedbackComment || '').slice(0, 500); if (c) payload.comment = c;
+      const stash = () => this._stashFeedback(payload);
+      if (!this.feedbackEndpoint || typeof fetch !== 'function') { stash(); return; }
+      try {
+        fetch(this.feedbackEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+          .then((r) => { if (!r || !r.ok) stash(); }).catch(stash);
+      } catch (e) { stash(); }
+    },
+    _stashFeedback(payload) {
+      try {
+        const KEY = 'fp_feedback_queue';
+        const arr = JSON.parse(localStorage.getItem(KEY) || '[]');
+        arr.push({ ...payload, ts: Date.now() });
+        localStorage.setItem(KEY, JSON.stringify(arr));
+      } catch (e) { /* 配额/隐私模式忽略 */ }
+    },
+
+    _indexOf(msg) { return this.messages.findIndex((m) => m.id === (msg && msg.id)); },
+    _truncateAfter(i) { if (i >= 0) this.messages.splice(i + 1); },
+    _fileIdsOf(msg) { return (((msg && msg.attachments) || []).map((a) => a.file_id)).filter(Boolean); },
+    hasTextBlock(msg) { return !!(msg && (msg.blocks || []).some((b) => b.type === 'text')); },
+
+    /** 重试用户消息:截断其后所有轮次,从该提问重新生成。 */
+    retryUserMessage(msg) {
+      if (this.sendStatus === 'streaming' || !msg || msg.role !== 'user') return;
+      const i = this._indexOf(msg);
+      if (i < 0) return;
+      this._truncateAfter(i);
+      this._beginAssistantTurn(msg.raw || '', this._fileIdsOf(msg));
+    },
+    /** 重新生成模型回复:定位其前一条用户消息并重试。 */
+    retryAssistant(msg) {
+      if (this.sendStatus === 'streaming' || !msg || msg.role !== 'assistant') return;
+      const i = this._indexOf(msg);
+      for (let k = i - 1; k >= 0; k--) {
+        if (this.messages[k].role === 'user') return this.retryUserMessage(this.messages[k]);
+      }
+    },
+    /** 编辑用户消息:内容载入 composer,进入"编辑中"态(发送即覆盖重发)。
+     *  注:命名避开 skills.js 的 startEdit/cancelEdit(同根组件合并,名字会互相覆盖)。 */
+    editMessage(msg) {
+      if (this.sendStatus === 'streaming' || !msg || msg.role !== 'user') return;
+      this.draft = msg.raw || '';
+      this.editingId = msg.id;
+      this.$nextTick(() => {
+        const t = document.querySelector('.composer-bar .composer-input');
+        if (t) { t.focus(); this.autogrow({ target: t }); }
+      });
+    },
+    cancelMessageEdit() { this.editingId = null; this.draft = ''; this._resetComposerHeight(); },
 
     // ---- 会话历史(§12-D1)----
     initChat() {
