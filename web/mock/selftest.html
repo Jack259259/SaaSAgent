@@ -29,14 +29,14 @@
   <ul id="results"></ul>
 
   <script type="module">
-    import { installMockSSE, parseSSE } from './mock-sse.js';
+    import { installMockSSE, parseSSE, pickScenario } from './mock-sse.js';
     import { renderMarkdown } from '../js/markdown.js';
-    import { appendToken } from '../js/chat.js';
-    import { newRun, applyPlan, applyStep, applyToolCall, applyToolResult, applyErrorToRun, snapshotRun, classifyResult, toolDisplayName } from '../js/run.js';
-    import { postChatStream, buildChatBody, buildConfirmBody, buildAskBody } from '../js/sse.js';
-    import { validateFile, fileExt, humanSize, ATTACH_LIMITS } from '../js/attachments.js';
+    import { appendToken, createChat } from '../js/chat.js';
+    import { newRun, applyPlan, applyStep, applyToolCall, applyToolResult, applyErrorToRun, completeRunSteps, runSummaryLine, snapshotRun, classifyResult, toolDisplayName } from '../js/run.js';
+    import { postChatStream, parseFrame, buildChatBody, buildConfirmBody, buildAskBody, setUserCtx } from '../js/sse.js';
+    import { validateFile, fileExt, humanSize, isImageExt, ATTACH_LIMITS } from '../js/attachments.js';
     import { createConversationStore, groupByTime } from '../js/store.js';
-    import { canManageSkills, validateSkillName, validateSkillZip, splitFrontmatter, SKILL_ZIP_LIMITS, listSkills, createSkill, setSkillStatus, uploadSkillZip } from '../js/skills.js';
+    import { canManageSkills, validateSkillName, validateSkillZip, splitFrontmatter, SKILL_ZIP_LIMITS, listSkills, createSkill, setSkillStatus, uploadSkillZip, createSkills } from '../js/skills.js';
 
     const results = [];
     const assert = (name, cond) => results.push({ name, ok: !!cond });
@@ -194,6 +194,140 @@
     await assertAsync('skill api: status→active', async () => { const l = await listSkills(); const d = l.find((s) => s.status === 'draft'); if (!d) return false; const r = await setSkillStatus(d.id, 'active'); return r.status === 'active'; });
     await assertAsync('skill api: upload 多条结果(成功+拒绝)', async () => { const r = await uploadSkillZip(new File(['x'], 'pack.zip', { type: 'application/zip' })); return Array.isArray(r.results) && r.results.length >= 2 && r.results.some((x) => x.ok) && r.results.some((x) => !x.ok); });
     await assertAsync('skill api: upload 非法 zip→400', async () => { try { await uploadSkillZip(new File(['x'], 'invalid.zip', { type: 'application/zip' })); return false; } catch (e) { return e.status === 400; } });
+
+    // ===== 审计补强:P0 安全 / P1 事件投影 / P2 边界 =====
+    // ---- P0 安全:更多 XSS 向量 + 工具结果消毒 + 安全渲染哨兵 ----
+    assert('xss: iframe 清除', !/<iframe/i.test(renderMarkdown('<iframe src="javascript:alert(1)"></iframe>')));
+    assert('xss: svg onload 清除', !/onload/i.test(renderMarkdown('<svg onload=alert(1)></svg>')));
+    assert('xss: object/embed 清除', (() => { const h = renderMarkdown('<object data=x></object><embed src=x>'); return !/<object/i.test(h) && !/<embed/i.test(h); })());
+    assert('xss: form/input 清除', (() => { const h = renderMarkdown('<form><input value=x></form>'); return !/<form/i.test(h) && !/<input/i.test(h); })());
+    assert('xss: 大小写 JaVaScRiPt: 清除', !/javascript:/i.test(renderMarkdown('[x](JaVaScRiPt:alert(1))')));
+    assert('xss: onmouseover 清除', !/onmouseover/i.test(renderMarkdown('<a href="#" onmouseover=alert(1)>x</a>')));
+    assert('xss: details ontoggle 清除', !/ontoggle/i.test(renderMarkdown('<details open ontoggle=alert(1)></details>')));
+    assert('xss: <style> 清除', !/<style/i.test(renderMarkdown('<style>*{x:1}</style>')));
+    assert('xss: 外链注入 rel=noopener + target', (() => { const h = renderMarkdown('[x](https://evil.example/)'); return /rel="noopener noreferrer"/.test(h) && /target="_blank"/.test(h); })());
+
+    const _chatSan = createChat();
+    assert('xss: 工具结果经 renderMarkdown 消毒(onerror)', !/onerror/i.test(_chatSan.toolResultHtml({ resultSummary: '<img src=x onerror=alert(1)>' })));
+    assert('xss: 工具结果 script 清除', !/<script/i.test(_chatSan.toolResultHtml({ resultSummary: 'a<script>x<\/script>b' })));
+    assert('xss: SKILL 预览 iframe/onerror 清除', (() => { const h = renderMarkdown(splitFrontmatter('---\nname: x\n---\n<iframe></iframe><img src=q onerror=alert(1)>').body); return !/<iframe/i.test(h) && !/onerror/i.test(h); })());
+
+    await assertAsync('safe-render: 不可信文本不走 x-html(prompt/message/question)', async () => {
+      const html = await (await fetch('../index.html')).text();
+      return !/x-html\s*=\s*"b\.prompt"/.test(html) && !/x-html\s*=\s*"b\.message"/.test(html) && !/x-html\s*=\s*"q\.question"/.test(html);
+    });
+
+    // ---- P1 事件投影:createChat() POJO 驱动 _onEvent / _finishDone(最小 this 桩)----
+    const mkChat = () => {
+      const c = createChat();
+      c.scrollToBottom = () => {};
+      c.$nextTick = (fn) => { if (fn) fn(); };
+      c.stuckToBottom = false;
+      c.activeConvId = null; // _persist 早返回,不写 localStorage
+      c.messages = [{ id: 'a', role: 'assistant', blocks: [], streaming: true, created_at: 0 }];
+      c.currentRun = newRun();
+      return c;
+    };
+
+    const cP = mkChat();
+    cP._onEvent('plan', { version: 1, steps: [{ id: 's1', goal: 'g' }] });
+    assert('proj: plan→currentRun.plan', !!cP.currentRun.plan && cP.currentRun.plan.steps.length === 1);
+    cP._onEvent('step', { index: 0, note: '进行' });
+    assert('proj: step→focus', cP.currentRun.focus === '进行');
+    cP._onEvent('tool_call', { id: 't1', tool: 'query_finance_data', arguments: {} });
+    cP._onEvent('tool_result_summary', { id: 't1', tool: 'query_finance_data', summary: '短', workspace_ref: 'w' });
+    assert('proj: tool_call/result→时间线 done', cP.currentRun.toolTimeline.length === 1 && cP.currentRun.toolTimeline[0].status === 'done');
+    cP._onEvent('answer_delta', { text: '你好' });
+    assert('proj: answer_delta→开放 text 块', cP.messages[0].blocks.some((b) => b.type === 'text' && b.raw === '你好' && b.open));
+    cP._onEvent('citation', { items: [{ title: 'T', source: 'S', ref: 'https://x/' }] });
+    assert('proj: citation→映射 block', cP.messages[0].blocks.some((b) => b.type === 'citation' && b.items[0].title === 'T'));
+
+    const cCf = mkChat();
+    cCf._onEvent('confirm_request', { id: 'cf', prompt: 'p', options: ['是', '否'] });
+    assert('proj: confirm→pendingResume + confirm 块', !!cCf.pendingResume && cCf.pendingResume.kind === 'confirm' && cCf.messages[0].blocks.some((b) => b.type === 'confirm'));
+
+    const cAsk = mkChat();
+    cAsk._onEvent('ask_user', { id: 'a', questions: [{ question: 'q?', options: ['x'] }] });
+    assert('proj: ask→pendingResume + ask 块', !!cAsk.pendingResume && cAsk.pendingResume.kind === 'ask' && cAsk.messages[0].blocks.some((b) => b.type === 'ask'));
+
+    const cErr = mkChat();
+    cErr._onEvent('tool_call', { id: 'x', tool: 'x', arguments: {} });
+    cErr._onEvent('error', { code: 'E', message: 'boom' });
+    assert('proj: error→error 块 + 运行中工具转失败', cErr._turnErrored === true && cErr.messages[0].blocks.some((b) => b.type === 'error') && cErr.currentRun.toolTimeline[0].status === 'failed');
+
+    const cUnk = mkChat();
+    const _nblk = cUnk.messages[0].blocks.length;
+    cUnk._onEvent('totally_unknown', { foo: 1 });
+    assert('proj: 未知事件忽略不崩', cUnk.messages[0].blocks.length === _nblk);
+
+    const cDone = mkChat();
+    cDone._onEvent('plan', { version: 1, steps: [{ id: 's', goal: 'g' }] });
+    cDone._onEvent('answer_delta', { text: 'ans' });
+    cDone._finishDone();
+    assert('proj: done→run 快照入消息 + currentRun 清空', cDone.currentRun === null && cDone.messages[0].blocks.some((b) => b.type === 'run') && cDone.messages[0].streaming === false);
+    assert('proj: done→open text 关闭并渲染', cDone.messages[0].blocks.some((b) => b.type === 'text' && b.open === false && /ans/.test(b.html || '')));
+
+    const cStop = mkChat();
+    cStop._onEvent('plan', { version: 1, steps: [{ id: 's', goal: 'g' }] });
+    cStop._finishStopped();
+    assert('proj: stopped→「已停止」note + currentRun 清空', cStop.currentRun === null && cStop.messages[0].blocks.some((b) => b.type === 'note' && /已停止/.test(b.text)));
+
+    // ---- P1 SSE 韧性:parseFrame(生产解析器)+ parseSSE 畸形/截断不崩 ----
+    assert('sse: parseFrame 正常帧', (() => { const f = parseFrame('event: done\ndata: {"stop_reason":"x"}'); return f.event === 'done' && f.data.stop_reason === 'x'; })());
+    assert('sse: parseFrame 空帧→null', parseFrame('') === null && parseFrame('   ') === null);
+    assert('sse: parseFrame 非 JSON data 保留原文', parseFrame('event: answer_delta\ndata: not json').data === 'not json');
+    assert('sse: parseFrame 缺 event→message', (() => { const f = parseFrame('data: {"a":1}'); return f.event === 'message' && f.data.a === 1; })());
+    assert('sse: parseFrame 多行 data 拼接', parseFrame('event: x\ndata: l1\ndata: l2').data === 'l1\nl2');
+    assert('sse: parseSSE 截断流不崩', (() => { const e = parseSSE('event: answer_delta\ndata: {"text":"a"}\n\nevent: done\ndata: {"sto'); return Array.isArray(e) && e[0].data.text === 'a'; })());
+    assert('sse: parseSSE 空/纯空行→[]', parseSSE('').length === 0 && parseSSE('\n\n\n\n').length === 0);
+    assert('sse: parseSSE 非 JSON 数据保留原文不崩', (() => { const e = parseSSE('event: error\ndata: oops\n\n'); return e[0].event === 'error' && e[0].data === 'oops'; })());
+
+    // ---- P2 边界:折叠阈值 / replan / clearAll / 角色门控 / 校验边界 ----
+    assert('fold: 恰 3 行→inline', classifyResult('a\nb\nc').tier === 'inline');
+    assert('fold: 4 行→long', classifyResult('a\nb\nc\nd').tier === 'long');
+    assert('fold: JSON 形状→structured', classifyResult('{\n "a": 1\n}').tier === 'structured');
+    assert('fold: 长列表>4 项→structured', classifyResult('- a\n- b\n- c\n- d\n- e').tier === 'structured');
+
+    const rr = newRun();
+    applyPlan(rr, { version: 1, steps: [{ id: 'a', goal: 'g0' }, { id: 'b', goal: 'g1' }] });
+    applyPlan(rr, { version: 2, steps: [{ id: 'x', goal: 'n0' }, { id: 'y', goal: 'n1' }, { id: 'z', goal: 'n2' }] });
+    assert('run: replan(v2)替换 steps', rr.plan.version === 2 && rr.plan.steps.length === 3 && rr.plan.steps[0].id === 'x');
+    applyStep(rr, { index: 1, note: 'd' });
+    completeRunSteps(rr);
+    assert('run: completeRunSteps running→done', rr.plan.steps[1].status === 'done');
+    assert('run: runSummaryLine 文案', /计划 3 步/.test(runSummaryLine(rr)));
+
+    const st2 = createConversationStore();
+    const cv2 = st2.createConversation('待清除');
+    st2.saveMessages(cv2.id, [{ id: 'u', role: 'user', raw: 'x', attachments: [] }]);
+    st2.clearAll();
+    assert('repo: clearAll 清空索引与消息', st2.listConversations().length === 0 && st2.getConversation(cv2.id) === null);
+
+    const sk2 = createSkills();
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['analyst'], data_scope: {}, permissions: ['*'] });
+    assert('skill: skillAdmin 非授权→false', sk2.skillAdmin() === false);
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['skill_admin'], data_scope: {}, permissions: ['*'] });
+    assert('skill: skillAdmin 授权→true', sk2.skillAdmin() === true);
+    setUserCtx(null);
+    assert('skill: name 长度边界(<2/>64 拒)', validateSkillName('a').ok === false && validateSkillName('a'.repeat(65)).ok === false && validateSkillName('ab').ok === true);
+
+    assert('upload: isImageExt', isImageExt('png') && isImageExt('JPG') && !isImageExt('pdf'));
+    assert('mock: pickScenario 关键词路由', pickScenario('并行取数') === 'parallel' && pickScenario('请确认复核') === 'complex' && pickScenario('随便问问') === 'simple');
+
+    // ---- 逐条消息复制(copyTextOf 纯文本提取)----
+    const _cCopy = createChat();
+    assert('copy: 用户消息取 raw', _cCopy.copyTextOf({ role: 'user', raw: '提问X', blocks: [] }) === '提问X');
+    assert('copy: 助手仅拼接 text 块(跳过引用/卡片)', _cCopy.copyTextOf({ role: 'assistant', blocks: [{ type: 'text', raw: 'A' }, { type: 'citation', items: [] }, { type: 'text', raw: 'B' }] }) === 'A\nB');
+    assert('copy: 用户空 raw→空串', _cCopy.copyTextOf({ role: 'user', blocks: [] }) === '');
+    assert('copy: 助手无 text 块→空串', _cCopy.copyTextOf({ role: 'assistant', blocks: [{ type: 'run' }] }) === '');
+
+    // ---- FB-1:citation ref 协议白名单(safeHref + _normCitations 净化,红线 7)----
+    const _cCite = createChat();
+    assert('xss: citation ref javascript: → #', _cCite.safeHref('javascript:alert(1)') === '#');
+    assert('xss: citation ref 大小写+制表符绕过 → #', _cCite.safeHref('Ja\tvaScRiPt:alert(1)') === '#' && _cCite.safeHref('  JAVASCRIPT:alert(1)') === '#');
+    assert('xss: citation ref data:/vbscript: → #', _cCite.safeHref('data:text/html,<x>') === '#' && _cCite.safeHref('vbscript:msgbox(1)') === '#');
+    assert('safe: citation ref http(s)/相对/锚点/空 放行', _cCite.safeHref('https://x/') === 'https://x/' && _cCite.safeHref('/p') === '/p' && _cCite.safeHref('#a') === '#a' && _cCite.safeHref('') === '#');
+    assert('proj: _normCitations 经 safeHref 净化 ref', _cCite._normCitations({ items: [{ title: 'T', ref: 'javascript:alert(1)' }] })[0].ref === '#' && _cCite._normCitations({ items: [{ title: 'T', source: 'S', ref: 'https://ok/' }] })[0].ref === 'https://ok/');
 
     // ===== 渲染结果 =====
     const passed = results.filter((r) => r.ok).length;
