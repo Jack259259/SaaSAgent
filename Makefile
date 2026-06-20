@@ -15,7 +15,7 @@ UV ?= uv
 # 自动发现全部工作区包(packages/* + services/*),新增包无需再改此处。
 PKGS := $(wildcard packages/*) $(wildcard services/*)
 
-MYPY_PATHS := $(foreach p,$(PKGS),$(p)/src $(p)/tests) evals/src evals/tests tests/security
+MYPY_PATHS := $(foreach p,$(PKGS),$(p)/src $(p)/tests) evals/src evals/tests tests/security tests/e2e
 
 EVAL_SETS := nl2sql rag-qa code-qa sop-replay e2e
 

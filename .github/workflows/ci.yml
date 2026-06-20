@@ -28,9 +28,22 @@ jobs:
       - name: contract-test
         run: make contract-test
 
-      # 阶段 10:评估回归(e2e 剧本确定性,阈值=1.0)与安全负例总套件为必过门禁。
+      # 阶段 10:评估回归全集为必过门禁(阈值见 evals/README;e2e 剧本确定性=1.0)。
+      - name: eval-nl2sql
+        run: make eval E=nl2sql
+
+      - name: eval-rag-qa
+        run: make eval E=rag-qa
+
+      - name: eval-code-qa
+        run: make eval E=code-qa
+
+      - name: eval-sop-replay
+        run: make eval E=sop-replay
+
       - name: eval-e2e
         run: make eval E=e2e
 
+      # 安全负例总套件(tests/security)为必过门禁;跨能力端到端见 tests/e2e(已随 make test 收口)。
       - name: security-negatives
         run: uv run pytest tests/security
