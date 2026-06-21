@@ -59,3 +59,8 @@ API(对齐设计 §8.5.4):
   - **当前前端 `feedbackEndpoint=null` → 仅本地暂存**(`localStorage.fp_feedback_queue`),**不发网络请求**(避免对不存在端点 POST 产生控制台错误,亦免脏请求)。端点就绪后将 `feedbackEndpoint` 置 `'/feedback'`:改走网络上报 + 失败回退暂存,登录后可批量回放暂存队列。
   - **`trace_id` 目前 SSE 未暴露**(见 §C):前端暂以 `message_id` + `session_id` 标识;后端若在 `done` 事件 / 响应头暴露 `trace_id`,前端将一并上报以贯穿可观测链路(Langfuse)。
   - 鉴权同 `/chat`(同源 cookie/session 或 `X-User-Ctx`);**按租户隔离存储,反馈数据不跨租户**(红线 9)。意见为用户输入,后端入库前应做长度/注入防护。
+
+## G. 代码仓管理(已实现)+ 安全解压复用
+
+- **`/admin/repos*`(已实现)**:`agent-gateway` 已落地代码仓管理端点(list/clone/upload/delete/update),内部管理员 + 功能开关 `FP_REPO_ADMIN=1` + 主机白名单 `FP_REPO_GIT_HOSTS` + 审计;git/解压/索引硬化见 `services/agent-gateway/src/agent_gateway/repos.py`,UI 见 `web/`「代码仓管理」面板。详见 `docs/integration/code-repos.md §6`。
+- **安全解压已就位**:`packages/common/src/common/safe_extract.py`(防 zip-slip/炸弹/符号链接,支持 zip+tar 系)。**§E 的 `/skills/upload` 安全解压可直接复用此模块**,无需再造;后端实现 `/skills/upload` 时调用 `safe_extract(...)` 即满足红线 11/14 的解压安全要求。
