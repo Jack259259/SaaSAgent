@@ -38,6 +38,7 @@
     import { validateFile, fileExt, humanSize, isImageExt, ATTACH_LIMITS } from '../js/attachments.js';
     import { createConversationStore, groupByTime } from '../js/store.js';
     import { canManageSkills, validateSkillName, validateSkillZip, splitFrontmatter, SKILL_ZIP_LIMITS, listSkills, createSkill, setSkillStatus, uploadSkillZip, createSkills } from '../js/skills.js';
+    import { canManageRepos, validateRepoName, validateRepoUrl, validateRepoArchive, createRepos } from '../js/repos.js';
 
     const results = [];
     const assert = (name, cond) => results.push({ name, ok: !!cond });
@@ -419,6 +420,28 @@
     assert('color: .user-body 文字取自令牌(#1E293B)', _ubcs.color === 'rgb(30, 41, 59)');
     assert('color: .user-body 已不再用旧 surface-2 浅灰(#F1F5F9)', _ubcs.backgroundColor !== 'rgb(241, 245, 249)');
     _ub.remove();
+
+    // ===== 代码仓管理:角色门控 / 校验 / 状态机 / 合并防撞 =====
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['internal_dev'], data_scope: {}, permissions: ['*'] });
+    const _cRepo = createRepos();
+    assert('repo: repoAdmin 内部角色→true', _cRepo.repoAdmin() === true);
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['tenant_user'], data_scope: {}, permissions: ['*'] });
+    assert('repo: repoAdmin 非内部→false', _cRepo.repoAdmin() === false);
+    setUserCtx(null);
+    assert('repo: canManageRepos', canManageRepos(['internal_dev']) === true && canManageRepos(['tenant_user']) === false && canManageRepos([]) === false);
+    assert('repo: validateRepoName', validateRepoName('ok-repo_1').ok === true && validateRepoName('a').ok === false && validateRepoName('a b').ok === false && validateRepoName('../x').ok === false);
+    assert('repo: validateRepoUrl 仅 http(s)', validateRepoUrl('https://github.com/x/y').ok === true && validateRepoUrl('http://h/r').ok === true && validateRepoUrl('git@h:r').ok === false && validateRepoUrl('file:///x').ok === false);
+    assert('repo: validateRepoArchive 扩展名', validateRepoArchive({ name: 'r.zip', size: 10 }).ok === true && validateRepoArchive({ name: 'r.tar.gz', size: 10 }).ok === true && validateRepoArchive({ name: 'r.rar', size: 10 }).ok === false);
+    assert('repo: validateRepoArchive 超限拒', validateRepoArchive({ name: 'r.zip', size: 400 * 1024 * 1024 }).ok === false);
+    assert('repo: repoSourceLabel', _cRepo.repoSourceLabel('git') === 'Git' && _cRepo.repoSourceLabel('archive') === '压缩包');
+    _cRepo.startNewRepo(); assert('repo: startNewRepo→new + 默认分支 main', _cRepo.repoView === 'new' && _cRepo.repoForm.branch === 'main');
+    _cRepo.startUploadRepo(); assert('repo: startUploadRepo→upload', _cRepo.repoView === 'upload');
+    _cRepo.backToList(); assert('repo: backToList→list', _cRepo.repoView === 'list');
+    _cRepo.repoPending = { kind: 'clone', payload: {} }; _cRepo.repoCredOpen = true; _cRepo.cancelCred();
+    assert('repo: cancelCred 清待重试态', _cRepo.repoCredOpen === false && _cRepo.repoPending === null);
+    const _repoKeys = Object.keys(createRepos());
+    const _otherForRepo = new Set([...Object.keys(createSkills()), ...Object.keys(createChat())]);
+    assert('merge: repos 方法不与 skills/chat 同名(防合并覆盖)', _repoKeys.every((k) => !_otherForRepo.has(k)));
 
     // ===== 渲染结果 =====
     const passed = results.filter((r) => r.ok).length;

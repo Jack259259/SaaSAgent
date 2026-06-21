@@ -59,6 +59,7 @@
         <p class="conv-hint" x-show="!conversations.length">还没有历史会话(本机 localStorage)。</p>
       </nav>
       <div class="sidebar-foot">
+        <button class="side-link" type="button" x-show="repoAdmin()" @click="openRepos()">代码仓管理</button>
         <button class="side-link" type="button" x-show="skillAdmin()" @click="openSkills()">Skill 管理</button>
         <button class="side-link" type="button" @click="clearHistory()">清除本地历史</button>
         <button class="side-link" type="button">用户 / 设置</button>
@@ -354,6 +355,97 @@
         </form>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ===== 代码仓管理 overlay ===== -->
+  <div class="skills-overlay" x-show="reposOpen" x-transition.opacity @keydown.escape.window="reposOpen && !repoCredOpen && closeRepos()">
+    <div class="skills-panel">
+      <div class="skills-header">
+        <h2 class="skills-title">代码仓管理</h2>
+        <div class="skills-header-actions">
+          <button class="btn primary" type="button" @click="startNewRepo()">新增(git)</button>
+          <button class="btn" type="button" @click="startUploadRepo()">上传压缩包</button>
+          <button class="icon-btn" type="button" @click="closeRepos()" aria-label="关闭" x-html="icon('x')"></button>
+        </div>
+      </div>
+      <div class="skills-body">
+        <div class="repo-busy" x-show="repoBusy" x-text="repoBusyHint"></div>
+
+        <!-- 列表 -->
+        <template x-if="repoView === 'list'">
+          <div class="repo-list">
+            <div class="skill-state" x-show="reposLoading">加载中…</div>
+            <div class="skill-state skills-err" x-show="reposError" x-text="reposError"></div>
+            <div class="skill-state" x-show="!reposLoading && !reposError && !reposList.length">暂无代码仓。点击「新增(git)」或「上传压缩包」。</div>
+            <template x-if="reposList.length">
+              <div class="repo-table">
+                <div class="repo-row repo-head">
+                  <span>名称</span><span>代码仓地址</span><span>分支</span><span>来源</span><span>更新时间</span><span class="repo-ops-h">操作</span>
+                </div>
+                <template x-for="r in reposList" :key="r.name">
+                  <div class="repo-row">
+                    <span class="repo-name" x-text="r.name"></span>
+                    <span class="repo-url" :title="r.url" x-text="r.url || '—'"></span>
+                    <span x-text="r.branch || '—'"></span>
+                    <span class="repo-src" x-text="repoSourceLabel(r.source)"></span>
+                    <span class="repo-upd" x-text="repoFmtTime(r.updated_at)"></span>
+                    <span class="repo-ops">
+                      <button class="btn sm" type="button" :disabled="repoBusy" @click="updateRepo(r)">更新</button>
+                      <button class="btn sm ghost" type="button" :disabled="repoBusy" @click="removeRepo(r.name)">删除</button>
+                    </span>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- 新增(git clone) -->
+        <template x-if="repoView === 'new'">
+          <div class="skill-form">
+            <button class="link-btn" type="button" @click="backToList()">← 返回列表</button>
+            <h3>新增代码仓(git clone)</h3>
+            <label class="form-field"><span>名称(repo-name)</span><input class="form-input" type="text" x-model="repoForm.name" @input="repoFormError = ''" placeholder="字母 / 数字 / _ / -,2–64 字符"></label>
+            <label class="form-field"><span>代码仓地址(repo-url)</span><input class="form-input" type="text" x-model="repoForm.url" @input="repoFormError = ''" placeholder="https://github.com/org/repo.git"></label>
+            <label class="form-field"><span>分支(branch)</span><input class="form-input" type="text" x-model="repoForm.branch" placeholder="main"></label>
+            <div class="form-err" x-show="repoFormError" x-text="repoFormError"></div>
+            <div class="skill-form-actions">
+              <button class="btn primary" type="button" :disabled="repoBusy" @click="submitClone()">执行</button>
+              <span class="save-hint">后端 git clone + 建索引;私有仓将提示输入账号密码</span>
+            </div>
+          </div>
+        </template>
+
+        <!-- 上传压缩包 -->
+        <template x-if="repoView === 'upload'">
+          <div class="skill-form">
+            <button class="link-btn" type="button" @click="backToList()">← 返回列表</button>
+            <h3>上传代码仓压缩包</h3>
+            <label class="form-field"><span>名称(repo-name)</span><input class="form-input" type="text" x-model="repoUploadName" @input="repoUploadError = ''" placeholder="字母 / 数字 / _ / -,2–64 字符"></label>
+            <input type="file" accept=".zip,.tar,.tar.gz,.tar.bz2,.tgz,.tbz2" class="file-input-hidden" x-ref="repoArchive" @change="pickRepoArchive($event)">
+            <div class="form-err" x-show="repoUploadError" x-text="repoUploadError"></div>
+            <div class="skill-form-actions">
+              <button class="btn primary" type="button" :disabled="repoBusy" @click="$refs.repoArchive.click()">选择 .zip/.tar 并上传</button>
+              <span class="save-hint">前端不解压;后端安全解压(防 zip-slip / 炸弹)+ 建索引</span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- 凭据二次弹窗(私有仓 git clone 需认证)-->
+    <div class="repo-cred-overlay" x-show="repoCredOpen" x-transition.opacity>
+      <div class="repo-cred-modal">
+        <h3>仓库需要认证</h3>
+        <p class="repo-cred-tip">该仓匿名拉取失败,请输入账号密码(仅本次用于带凭据重试,不持久化、不入日志)。</p>
+        <label class="form-field"><span>账号</span><input class="form-input" type="text" x-model="repoCred.username" autocomplete="off"></label>
+        <label class="form-field"><span>密码 / Token</span><input class="form-input" type="password" x-model="repoCred.password" autocomplete="off"></label>
+        <div class="skill-form-actions">
+          <button class="btn primary" type="button" :disabled="repoBusy" @click="submitCred()">认证并拉取</button>
+          <button class="btn ghost" type="button" @click="cancelCred()">取消</button>
+        </div>
+      </div>
     </div>
   </div>
 

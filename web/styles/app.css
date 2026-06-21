@@ -425,3 +425,21 @@ a{color:var(--accent);}
 .save-hint{color:var(--brand-700);font-size:var(--text-sm);}
 
 @media (max-width:720px){ .skill-edit-grid{grid-template-columns:1fr;} }
+
+/* 代码仓管理面板 */
+.repo-busy{margin-bottom:var(--space-3);padding:6px 12px;border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-muted);font-size:var(--text-sm);}
+.repo-table{display:flex;flex-direction:column;font-size:var(--text-sm);}
+.repo-row{display:grid;grid-template-columns:1.2fr 2fr .8fr .7fr 1.1fr auto;align-items:center;gap:var(--space-3);padding:8px 10px;border-bottom:1px solid var(--border);}
+.repo-head{color:var(--text-muted);font-size:var(--text-xs);font-weight:600;}
+.repo-name{font-weight:600;word-break:break-all;}
+.repo-url{color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.repo-src,.repo-upd{color:var(--text-muted);}
+.repo-upd{font-size:var(--text-xs);}
+.repo-ops{display:flex;gap:6px;justify-content:flex-end;}
+.repo-ops-h{text-align:right;}
+.btn.ghost{background:none;border:1px solid var(--border);}
+/* 凭据二次弹窗(私有仓 git clone)*/
+.repo-cred-overlay{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,.45);}
+.repo-cred-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);padding:var(--space-5);width:min(420px,92vw);display:flex;flex-direction:column;gap:var(--space-3);}
+.repo-cred-modal h3{margin:0;}
+.repo-cred-tip{margin:0;font-size:var(--text-sm);color:var(--text-muted);}
