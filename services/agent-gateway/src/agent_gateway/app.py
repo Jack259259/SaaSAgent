@@ -7,15 +7,18 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import shutil
+import tempfile
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from contracts import UserCtx
+from contracts.models import ResultStatus
 from llm import Provider
 from memory_svc import MemoryService
 from orchestrator import (
@@ -25,11 +28,14 @@ from orchestrator import (
     SessionNotFoundError,
     SessionStore,
     ToolRegistry,
+    emit_audit,
+    who_from_user_ctx,
 )
 from orchestrator.injection import opening_system_prompt
 from orchestrator.skills import SkillIndex
 
-from .auth import get_trace_id, require_user_ctx
+from . import repos
+from .auth import get_trace_id, require_repo_admin, require_user_ctx
 from .deps import (
     get_memory_service,
     get_provider,
@@ -121,6 +127,145 @@ async def chat_confirm(
             yield encode_sse(event)
 
     return _sse_response(event_stream(), session)
+
+
+# ── 代码仓管理(/admin/repos;内部管理员 + FP_REPO_ADMIN;§12 item3 的 UI 化)──────
+# v1 同步执行;git 子进程 / 安全解压 / 进程内索引的硬化见 repos.py。写操作全量审计(红线 3/9)。
+_MAX_UPLOAD_BYTES = 300 * 1024 * 1024
+_ARCHIVE_EXTS = (".tar.gz", ".tar.bz2", ".tgz", ".tbz2", ".tar", ".zip")
+
+
+class RepoCloneRequest(BaseModel):
+    name: str
+    url: str
+    branch: str = "main"
+    username: str | None = None
+    password: str | None = None
+
+
+class RepoUpdateRequest(BaseModel):
+    username: str | None = None
+    password: str | None = None
+
+
+def _repo_audit(user_ctx: UserCtx, trace_id: str, action: str, status: ResultStatus) -> None:
+    emit_audit(
+        who=who_from_user_ctx(user_ctx),
+        tool=f"repo_admin:{action}",
+        args_digest="-",  # 不记 url/凭据原文(§6)
+        result_status=status,
+        trace_id=trace_id,
+    )
+
+
+def _repo_op(
+    action: str, user_ctx: UserCtx, trace_id: str, fn: Callable[[], dict[str, Any]]
+) -> dict[str, Any] | JSONResponse:
+    try:
+        result = fn()
+    except repos.RepoError as exc:
+        _repo_audit(user_ctx, trace_id, action, ResultStatus.error)
+        return JSONResponse(
+            status_code=exc.http_status, content={"code": exc.code, "message": str(exc)}
+        )
+    _repo_audit(user_ctx, trace_id, action, ResultStatus.ok)
+    return result
+
+
+@app.get("/admin/repos")
+async def repos_list(
+    user_ctx: Annotated[UserCtx, Depends(require_repo_admin)],
+) -> list[dict[str, Any]]:
+    return repos.list_repos()
+
+
+@app.post("/admin/repos", response_model=None)
+async def repos_clone(
+    body: RepoCloneRequest,
+    user_ctx: Annotated[UserCtx, Depends(require_repo_admin)],
+    trace_id: Annotated[str, Depends(get_trace_id)],
+) -> dict[str, Any] | JSONResponse:
+    return _repo_op(
+        "clone",
+        user_ctx,
+        trace_id,
+        lambda: repos.clone_repo(
+            body.name, body.url, body.branch, username=body.username, password=body.password
+        ),
+    )
+
+
+@app.post("/admin/repos/{name}/update", response_model=None)
+async def repos_update_git(
+    name: str,
+    body: RepoUpdateRequest,
+    user_ctx: Annotated[UserCtx, Depends(require_repo_admin)],
+    trace_id: Annotated[str, Depends(get_trace_id)],
+) -> dict[str, Any] | JSONResponse:
+    return _repo_op(
+        "update",
+        user_ctx,
+        trace_id,
+        lambda: repos.update_git_repo(name, username=body.username, password=body.password),
+    )
+
+
+@app.delete("/admin/repos/{name}", response_model=None)
+async def repos_delete(
+    name: str,
+    user_ctx: Annotated[UserCtx, Depends(require_repo_admin)],
+    trace_id: Annotated[str, Depends(get_trace_id)],
+) -> dict[str, Any] | JSONResponse:
+    return _repo_op("delete", user_ctx, trace_id, lambda: repos.delete_repo(name))
+
+
+@app.post("/admin/repos/upload", response_model=None)
+async def repos_upload(
+    user_ctx: Annotated[UserCtx, Depends(require_repo_admin)],
+    trace_id: Annotated[str, Depends(get_trace_id)],
+    name: Annotated[str, Form()],
+    file: Annotated[UploadFile, File()],
+) -> dict[str, Any] | JSONResponse:
+    """上传压缩包(新增或替换 archive 仓):前端不解压,后端安全解压(红线 14)。"""
+    try:
+        repos._validate_name(name)
+    except repos.RepoError as exc:
+        return JSONResponse(
+            status_code=exc.http_status, content={"code": exc.code, "message": str(exc)}
+        )
+    fname = (file.filename or "").lower()
+    suffix = next((e for e in _ARCHIVE_EXTS if fname.endswith(e)), None)
+    if suffix is None:
+        return JSONResponse(
+            status_code=400,
+            content={"code": "INVALID_INPUT", "message": "仅支持 .zip / .tar / .tar.gz / .tar.bz2"},
+        )
+    tmpdir = Path(tempfile.mkdtemp(prefix="repo-upload-"))
+    tmp = tmpdir / ("upload" + suffix)
+    try:
+        size = 0
+        with open(tmp, "wb") as out:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > _MAX_UPLOAD_BYTES:
+                    return JSONResponse(
+                        status_code=413, content={"code": "TOO_LARGE", "message": "压缩包超过上限"}
+                    )
+                out.write(chunk)
+        existing = next((r for r in repos.list_repos() if r["name"] == name), None)
+        if existing and existing.get("source") == "git":
+            return JSONResponse(
+                status_code=409,
+                content={"code": "REPO_EXISTS", "message": "该名称为 git 仓,请改用更新或换名"},
+            )
+        op: Callable[[], dict[str, Any]] = (
+            (lambda: repos.update_archive_repo(name, tmp))
+            if existing
+            else (lambda: repos.add_archive_repo(name, tmp))
+        )
+        return _repo_op("upload", user_ctx, trace_id, op)
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 # ── 内嵌前端静态伺服 + SPA 回退(§10;唯一的前端相关后端改动)──────────────────
