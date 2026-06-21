@@ -410,6 +410,16 @@
     const _chatNew = ['editMessage', 'cancelMessageEdit', 'setVote', 'submitFeedbackComment', 'cancelFeedbackComment', 'retryUserMessage', 'retryAssistant', 'copyMessage', 'messageText', 'messageMarkdown', 'hasTextBlock'];
     assert('merge: chat 新方法不与 skills 同名(防合并覆盖)', _chatNew.every((k) => !_skillKeys.has(k)));
 
+    // ===== 用户气泡配色:取自 CSS 令牌(石板蓝),组件不写死色值 =====
+    const _root = getComputedStyle(document.documentElement);
+    assert('color: --user-bubble-bg/fg 令牌已定义', _root.getPropertyValue('--user-bubble-bg').trim().length > 0 && _root.getPropertyValue('--user-bubble-fg').trim().length > 0);
+    const _ub = document.createElement('div'); _ub.className = 'msg-body user-body'; document.body.appendChild(_ub);
+    const _ubcs = getComputedStyle(_ub);
+    assert('color: .user-body 背景取自令牌(浅色石板蓝 #DBE4F0)', _ubcs.backgroundColor === 'rgb(219, 228, 240)');
+    assert('color: .user-body 文字取自令牌(#1E293B)', _ubcs.color === 'rgb(30, 41, 59)');
+    assert('color: .user-body 已不再用旧 surface-2 浅灰(#F1F5F9)', _ubcs.backgroundColor !== 'rgb(241, 245, 249)');
+    _ub.remove();
+
     // ===== 渲染结果 =====
     const passed = results.filter((r) => r.ok).length;
     const failed = results.length - passed;

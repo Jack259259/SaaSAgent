@@ -48,8 +48,12 @@
   --danger:#dc2626;
 
   /* W1 消息 / 流式 */
-  --bubble-user:var(--surface-2);
   --cursor:var(--accent);
+
+  /* 用户气泡(石板蓝 · 冷调科技感;令牌化,组件不写死;明暗均 WCAG AAA) */
+  --user-bubble-bg:#dbe4f0;       /* 浅:冷灰蓝,比原 surface-2 更深更冷 */
+  --user-bubble-fg:#1e293b;       /* 对比 11.40:1(AAA) */
+  --user-bubble-border:#c7d6ea;   /* 1px 同系边框,轻质感 */
 }
 
 /* ===== 暗色主题 ===== */
@@ -66,4 +70,9 @@ html[data-theme="dark"] {
   --accent-contrast:var(--gray-950);
   --danger:#f87171;
   --shadow-md:0 4px 16px rgba(0,0,0,.45);
+
+  /* 用户气泡(深色:半透深蓝底,对比 10.77:1 AAA) */
+  --user-bubble-bg:#243044;
+  --user-bubble-fg:#e2e8f0;
+  --user-bubble-border:#2f3e57;
 }

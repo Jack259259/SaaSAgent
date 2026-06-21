@@ -181,9 +181,9 @@
                     </div>
                   </div>
                   <div class="msg-action-bar user-actions" x-show="m.role === 'user' && editingId !== m.id">
-                    <button class="act-btn" type="button" title="复制" aria-label="复制提问" @click="copyMessage($event, m, 'text')"><span class="act-ico" x-html="icon('copy')"></span></button>
-                    <button class="act-btn" type="button" title="编辑" aria-label="编辑提问" @click="editMessage(m)"><span class="act-ico" x-html="icon('pencil')"></span></button>
                     <button class="act-btn" type="button" title="重试" aria-label="重试该提问" @click="retryUserMessage(m)"><span class="act-ico" x-html="icon('refresh-cw')"></span></button>
+                    <button class="act-btn" type="button" title="编辑" aria-label="编辑提问" @click="editMessage(m)"><span class="act-ico" x-html="icon('pencil')"></span></button>
+                    <button class="act-btn" type="button" title="复制" aria-label="复制提问" @click="copyMessage($event, m, 'text')"><span class="act-ico" x-html="icon('copy')"></span></button>
                   </div>
 
                   <!-- 助手:blocks -->
@@ -293,8 +293,7 @@
                       </template>
                       <!-- 模型回复操作栏:整条一栏,完成后显示(对齐 claude.ai)-->
                       <div class="msg-action-bar asst-actions" x-show="!m.streaming && hasTextBlock(m)">
-                        <button class="act-btn" type="button" title="复制" aria-label="复制回答（纯文本）" @click="copyMessage($event, m, 'text')"><span class="act-ico" x-html="icon('copy')"></span></button>
-                        <button class="act-btn" type="button" title="复制 Markdown 源" aria-label="复制回答（Markdown 源）" @click="copyMessage($event, m, 'md')"><span class="act-ico act-md">Md</span></button>
+                        <button class="act-btn" type="button" title="复制" aria-label="复制回答" @click="copyMessage($event, m, 'text')"><span class="act-ico" x-html="icon('copy')"></span></button>
                         <button class="act-btn" type="button" title="赞" aria-label="点赞" :class="{ on: m.vote === 'up' }" :aria-pressed="m.vote === 'up'" @click="setVote(m, 'up')"><span class="act-ico" x-html="icon('thumbs-up')"></span></button>
                         <button class="act-btn" type="button" title="踩" aria-label="点踩" :class="{ on: m.vote === 'down' }" :aria-pressed="m.vote === 'down'" @click="setVote(m, 'down')"><span class="act-ico" x-html="icon('thumbs-down')"></span></button>
                         <button class="act-btn" type="button" title="重新生成" aria-label="重新生成回答" @click="retryAssistant(m)"><span class="act-ico" x-html="icon('refresh-cw')"></span></button>
