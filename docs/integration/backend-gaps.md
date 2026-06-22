@@ -71,4 +71,23 @@ API(对齐设计 §8.5.4):
   - **ingest 进程内异步**:`asyncio.run(ingest_dir(...))` 后台线程执行(**无子进程 / 无 shell**;kb 取自枚举、src 取自固定映射 → 命令注入面为零),同库串行(运行中再触发 → 409),job 注册表供 `GET .../ingest/status` 轮询。
   - **文档落盘** `data/knowledge/{business|it-design}/`(env `FP_KNOWLEDGE_DIR` 可覆盖);文件名取 basename + 扩展名白名单(`.md/.markdown/.txt/.docx`)+ realpath 父目录校验(防穿越)+ 25MB 上限 + `parse_document` 试解析(损坏即拒)。
 - **`.docx` 解析已就位(ingest 路径)**:`rag_svc.chunking.parse_document` 现支持 `.docx`(零依赖 stdlib `zipfile`+`xml.etree`,段落保序 + 表格转 Markdown)。**注意:此为知识库 ingest 路径**;§B 的 `parse_user_file`(聊天附件解析)DOCX 仍待补,可复用 `rag_svc.chunking._docx_to_text`。
-- **知识图谱**:前端「查看知识图谱」按钮当前为占位(禁用 + TODO),真实功能(知识图谱构建/可视化)单独成段实现。
+- **知识图谱(后端层已实现)**:见 §I。前端「查看知识图谱」按钮当前仍为占位(可视化前端单独成段)。
+
+## I. 知识图谱查询(后端已实现 + 生产化 TODO)
+
+- **`/admin/kb/graph*`(已实现)**:三只读端点(`graph` / `graph/node/{entity_id}` / `graph/search`),
+  从 LightRAG 图提取 nodes/edges。鉴权复用 `require_kb_admin` + `it_design` 细 ACL(`is_internal`);
+  开关 `FP_KB_GRAPH`(默认开,`=0`→404);节点/边按租户∧标签在 rag-svc 内过滤(红线 5/9)。
+  契约见 `docs/integration/knowledge-graph-api.md`;实现 `agent_gateway/kb_graph.py` + `rag_svc/graph.py`。
+- **引擎**:`FP_KB_GRAPH_ENGINE` 默认 `mock`(`MockGraphProvider`,虚构 fixture,CI/联调用);生产切
+  `lightrag`(`LightRagGraphProvider`,真实图,**不进 CI** —— lightrag 未安装,镜像 `LightRagStore` 范式)。
+- **生产化 TODO(投产前接入真实图谱时)**:
+  1. **建图**:rag-svc 切真实 `LightRagStore`(`pip install lightrag-hku`)并对 business/it_design ingest
+     建图(当前默认 `LocalKnowledgeStore`、未建图 → 真实引擎下图为空)。
+  2. **图 ACL 标签级**:LightRAG 图节点/边原生**无 tenant_id/acl_tags**(provenance 仅 source_id/file_path)。
+     当前 `LightRagGraphProvider` 用 **(kb, tenant) 分目录物理隔离**(租户级,红线 9)+ **库默认标签**回退
+     (标签级 best-effort)。精确标签需:摄取时写入 `file_path` + 维护 `file_path→acl_tags` sidecar
+     (由 rag-svc ingest 的 per-doc 元数据构建);`LightRagGraphProvider._tags_for` 已留接入点。
+  3. **degree/source/chunk_ref**:真实路径为 best-effort(可能 null),前端需容忍。
+- **前端图谱可视化**:`web/` 的「查看知识图谱」交互(节点图渲染、点选下钻、搜索)单独成段实现,
+  对接上述契约。
