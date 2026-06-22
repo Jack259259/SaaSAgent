@@ -7,7 +7,7 @@ from pathlib import Path
 
 from code_svc import CodeService
 from data_svc import DataService, PostgresExecutor, SemanticLayer, SqlValidator, WrenAdapter
-from llm import AnthropicProvider, MockProvider, Provider, ScriptedTurn
+from llm import AnthropicProvider, HashingEmbedder, MockProvider, Provider, ScriptedTurn
 from memory_svc import MemoryService
 from orchestrator import SessionStore, ToolRegistry, base_tool_handlers
 from orchestrator.skills import SkillIndex
@@ -26,7 +26,12 @@ from orchestrator.tools import (
     make_search_knowledge_handler,
     make_search_memory_handler,
 )
-from rag_svc import RagService
+from rag_svc import (
+    KnowledgeGraphProvider,
+    LightRagGraphProvider,
+    MockGraphProvider,
+    RagService,
+)
 from scheduler_svc import (
     EscalationService,
     NotifyService,
@@ -50,6 +55,9 @@ _NOTIFY = NotifyService(channel=WebhookChannel())
 _ESCALATION = EscalationService()
 # 知识库索引根目录(由人工上传 + ingest 构建;空则检索返回"未找到依据")。
 _KNOWLEDGE_INDEX_DIR = Path("data/knowledge/.index")
+# 知识图谱(LightRAG 生产引擎)按 (kb, tenant) 分目录的根;CI/默认走 Mock,不读此目录。
+_KNOWLEDGE_GRAPH_DIR = Path("data/knowledge/.graph")
+_KB_GRAPH_PROVIDER: KnowledgeGraphProvider | None = None
 # 代码索引:仓根(人工 clone 到此)+ 符号库(code-index 构建)。
 _CODE_REPOS_DIR = Path("data/repos")
 _CODE_INDEX_DB = Path("data/code-index/symbols.db")
@@ -137,3 +145,27 @@ def get_registry() -> ToolRegistry:
 
 def get_session_store() -> SessionStore:
     return _SESSION_STORE
+
+
+def _build_graph_provider() -> KnowledgeGraphProvider:
+    """FP_KB_GRAPH_ENGINE 选引擎:默认 ``mock``(CI/无 LightRAG 实例);``lightrag`` → 真实图。
+
+    LightRAG 路径按 (kb, tenant) 分目录物理隔离(红线 9);embedding/llm 经 packages/llm 网关。
+    """
+    if os.environ.get("FP_KB_GRAPH_ENGINE", "mock") == "lightrag":
+        return LightRagGraphProvider(
+            working_dir_resolver=lambda kb, tenant: (
+                _KNOWLEDGE_GRAPH_DIR / kb / (tenant or "_global")
+            ),
+            embedder=HashingEmbedder(),
+            provider=get_provider(),
+        )
+    return MockGraphProvider()
+
+
+def get_kb_graph_service() -> RagService:
+    """知识图谱查询用 RagService(仅注图 Provider;不加载检索库)。Provider 单例缓存。"""
+    global _KB_GRAPH_PROVIDER
+    if _KB_GRAPH_PROVIDER is None:
+        _KB_GRAPH_PROVIDER = _build_graph_provider()
+    return RagService(stores={}, graph_provider=_KB_GRAPH_PROVIDER)

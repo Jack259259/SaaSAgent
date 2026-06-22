@@ -35,7 +35,7 @@ from orchestrator.injection import opening_system_prompt
 from orchestrator.skills import SkillIndex
 from rag_svc import acl as rag_acl
 
-from . import kb, repos
+from . import kb, kb_graph, repos
 from .auth import get_trace_id, require_kb_admin, require_repo_admin, require_user_ctx
 from .deps import (
     get_memory_service,
@@ -393,6 +393,10 @@ async def kb_ingest_status(
 ) -> dict[str, Any] | JSONResponse:
     _check_kb_access(kb_name, user_ctx, trace_id)
     return _kb_op("ingest_status", user_ctx, trace_id, lambda: kb.ingest_status(kb_name))
+
+
+# 知识图谱查询端点(/admin/kb/graph*;只读)。必须在下方 SPA 捕获路由之前注册(GET 路由优先)。
+app.include_router(kb_graph.router)
 
 
 # ── 内嵌前端静态伺服 + SPA 回退(§10;唯一的前端相关后端改动)──────────────────
