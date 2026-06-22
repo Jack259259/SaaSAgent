@@ -41,6 +41,7 @@
     import { canManageRepos, validateRepoName, validateRepoUrl, validateRepoArchive, createRepos } from '../js/repos.js';
     import { canManageKb, isKbInternal, validateKbName, validateKbFile, ingestLabel, isIngestPolling, listKbDocs, uploadKbDoc, ingestKb, ingestStatus, createKb, KB_UPLOAD_LIMIT } from '../js/kb.js';
     import { _resetKb } from './mock-kb.js';
+    import { canAccessIT, typeColorIndex, distinctTypes, edgeKey, sanitizeText, toVisNode, toVisEdge, toVisData, mergeGraph, debounce, getGraph, searchGraph, getGraphNode, createKnowledgeGraph } from '../js/knowledge-graph.js';
 
     const results = [];
     const assert = (name, cond) => results.push({ name, ok: !!cond });
@@ -511,6 +512,77 @@
     const _kbKeys = Object.keys(createKb());
     const _otherForKb = new Set([...Object.keys(createSkills()), ...Object.keys(createChat()), ...Object.keys(createRepos())]);
     assert('merge: kb 方法不与 skills/chat/repos 同名(防合并覆盖)', _kbKeys.every((k) => !_otherForKb.has(k)));
+
+    // ===== 知识图谱:契约→vis 转换 / 合并去重 / 类型过滤 / 门控 / debounce / 消毒 / API =====
+    // 契约 fixture(对齐 GraphNode/GraphEdge)
+    const _kgGraph = {
+      nodes: [
+        { entity_id: 'A', name: 'A', entity_type: '概念', description: '描述A', source: 'docA', acl_tags: ['public'] },
+        { entity_id: 'B', name: 'B', entity_type: '指标', description: '描述B', source: 'docB', acl_tags: ['public'] },
+        { entity_id: 'C', name: 'C', entity_type: '概念', description: '描述C', source: 'docC', acl_tags: ['public'] },
+      ],
+      edges: [
+        { edge_id: 'A->B', source_id: 'A', target_id: 'B', relation_type: '关联' },
+        { edge_id: 'A->C', source_id: 'A', target_id: 'C', relation_type: '包含' },
+      ],
+    };
+    const _vis = toVisData(_kgGraph);
+    assert('kg: toVisData 节点映射(id/label/group)', _vis.nodes.length === 3 && _vis.nodes[0].id === 'A' && _vis.nodes[0].label === 'A' && _vis.nodes[0].group === '概念');
+    assert('kg: toVisData 边映射(id/from/to)', _vis.edges.length === 2 && _vis.edges[0].from === 'A' && _vis.edges[0].to === 'B');
+    assert('kg: toVisNode 无 resolveColor 时不带 color', toVisNode(_kgGraph.nodes[0]).color === undefined);
+    assert('kg: toVisNode 带 resolveColor 时着色', !!toVisNode(_kgGraph.nodes[0], { resolveColor: () => '#123456' }).color);
+    assert('kg: edgeKey 回退(无 edge_id)', edgeKey({ source_id: 'X', target_id: 'Y', relation_type: 'r' }) === 'X->Y->r');
+
+    // 类型分布 / 过滤逻辑
+    assert('kg: distinctTypes 去重升序', JSON.stringify(distinctTypes(_kgGraph.nodes)) === JSON.stringify(['指标', '概念']));
+    assert('kg: typeColorIndex 确定性 + 0–7', typeColorIndex('概念') === typeColorIndex('概念') && typeColorIndex('概念') >= 0 && typeColorIndex('概念') < 8);
+
+    // 增量合并去重(展开邻居不产生重复)
+    const _inc = { nodes: [{ entity_id: 'C', name: 'C', entity_type: '概念' }, { entity_id: 'D', name: 'D', entity_type: '方法' }], edges: [{ edge_id: 'A->C', source_id: 'A', target_id: 'C' }, { edge_id: 'C->D', source_id: 'C', target_id: 'D' }] };
+    const _merged = mergeGraph(_kgGraph.nodes, _kgGraph.edges, _inc);
+    assert('kg: mergeGraph 节点去重(C 不重复,D 新增)', _merged.nodes.length === 4 && _merged.addedNodes.length === 1 && _merged.addedNodes[0].entity_id === 'D');
+    assert('kg: mergeGraph 边去重(A->C 不重复,C->D 新增)', _merged.edges.length === 3 && _merged.addedEdges.length === 1 && _merged.addedEdges[0].edge_id === 'C->D');
+    assert('kg: mergeGraph 不改原数组(纯函数)', _kgGraph.nodes.length === 3 && _kgGraph.edges.length === 2);
+
+    // 消毒(description / tooltip 不可信)
+    assert('kg: sanitizeText 剥离 script/img', !/<script|<img|onerror/i.test(sanitizeText('<img src=x onerror=alert(1)><script>x<\/script>说明')) && /说明/.test(sanitizeText('<b>说明</b>')));
+    assert('kg: toVisNode title 经消毒', !/<img|onerror/i.test(toVisNode({ entity_id: 'E', name: 'E', description: '<img src=x onerror=alert(1)>' }).title));
+
+    // 角色门控(IT 库可见性)
+    assert('kg: canAccessIT 仅内部', canAccessIT(['internal_dev']) === true && canAccessIT(['kb_admin']) === false && canAccessIT(['analyst']) === false);
+    const _kg = createKnowledgeGraph();
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['kb_admin'], data_scope: {}, permissions: [] });
+    assert('kg: kgAdmin 管理员→true、kgTabs 非内部仅业务库', _kg.kgAdmin() === true && _kg.kgTabs().length === 1 && _kg.kgTabs()[0].id === 'business');
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['internal_dev'], data_scope: {}, permissions: [] });
+    assert('kg: kgTabs 内部含 IT 库', _kg.kgTabs().length === 2 && _kg.kgTabs().some((t) => t.id === 'it_design'));
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['analyst'], data_scope: {}, permissions: [] });
+    assert('kg: kgAdmin 非授权→false', _kg.kgAdmin() === false);
+
+    // debounce:burst 内只触发一次
+    await assertAsync('kg: debounce burst 内只触发末次', async () => {
+      let calls = 0; let lastArg = null;
+      const d = debounce((x) => { calls++; lastArg = x; }, 30);
+      d(1); d(2); d(3);
+      await new Promise((r) => setTimeout(r, 60));
+      return calls === 1 && lastArg === 3;
+    });
+
+    // API(mock):内部角色 + IT 门控 + 搜索 + 节点详情(增量合并源)
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['internal_dev'], data_scope: {}, permissions: [] });
+    await assertAsync('kg api: getGraph business 返回 nodes/edges/stats', async () => { const g = await getGraph('business'); return Array.isArray(g.nodes) && g.nodes.length > 0 && Array.isArray(g.edges) && !!g.stats && typeof g.is_truncated === 'boolean'; });
+    await assertAsync('kg api: getGraph max_nodes 截断', async () => { const g = await getGraph('business', { maxNodes: 3 }); return g.nodes.length === 3 && g.is_truncated === true; });
+    await assertAsync('kg api: getGraph center_entity 子图', async () => { const g = await getGraph('business', { centerEntity: '执行率' }); const ids = g.nodes.map((n) => n.entity_id); return ids.includes('执行率') && ids.includes('资金计划'); });
+    await assertAsync('kg api: searchGraph 命中', async () => { const r = await searchGraph('business', '执行'); return r.entities.some((n) => n.entity_id === '执行率'); });
+    await assertAsync('kg api: getGraphNode 返回 node+neighbors', async () => { const d = await getGraphNode('business', '资金计划', { depth: 1 }); return d.node && d.node.entity_id === '资金计划' && d.neighbors.length > 0; });
+    await assertAsync('kg api: 节点详情可增量合并去重', async () => { const base = await getGraph('business'); const d = await getGraphNode('business', '资金计划'); const inc = { nodes: d.node ? [d.node, ...d.neighbors] : d.neighbors, edges: d.edges }; const m = mergeGraph(base.nodes, base.edges, inc); return m.nodes.length >= base.nodes.length && new Set(m.nodes.map((n) => n.entity_id)).size === m.nodes.length; });
+    await assertAsync('kg api: it_design 非 internal→403', async () => { setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['kb_admin'], data_scope: {}, permissions: [] }); try { await getGraph('it_design'); return false; } catch (e) { return e.status === 403; } });
+    await assertAsync('kg api: it_design internal→200', async () => { setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['internal_dev'], data_scope: {}, permissions: [] }); const g = await getGraph('it_design'); return g.nodes.length > 0; });
+    setUserCtx(null);
+
+    // 合并防撞:kg 方法不与 chat/kb/skills/repos 同名
+    const _kgKeys = Object.keys(createKnowledgeGraph());
+    const _otherForKg = new Set([...Object.keys(createSkills()), ...Object.keys(createChat()), ...Object.keys(createRepos()), ...Object.keys(createKb())]);
+    assert('merge: kg 方法不与 skills/chat/repos/kb 同名(防合并覆盖)', _kgKeys.every((k) => !_otherForKg.has(k)));
 
     // ===== 渲染结果 =====
     const passed = results.filter((r) => r.ok).length;

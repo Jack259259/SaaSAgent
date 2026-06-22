@@ -1,0 +1,98 @@
+/* knowledge-graph.css — 知识图谱面板(全屏 overlay,三区布局)。颜色取自 tokens.css。 */
+
+.kg-overlay{
+  position:fixed; inset:0; z-index:80;            /* 高于 .skills-overlay(70):从知识库弹窗之上打开 */
+  display:flex; flex-direction:column;
+  background:var(--bg);
+}
+/* 最小化:收成右下角小条 */
+.kg-overlay.kg-min{
+  inset:auto var(--space-4) var(--space-4) auto;
+  width:min(320px,80vw); height:auto; border:1px solid var(--border);
+  border-radius:var(--radius-lg); box-shadow:var(--shadow-md); overflow:hidden;
+}
+.kg-overlay.kg-min .kg-body{ display:none; }
+/* 全屏:本就铺满;保留 class 以便细调(隐藏圆角等) */
+.kg-overlay.kg-full{ inset:0; }
+
+.kg-header{
+  display:flex; align-items:center; gap:var(--space-3);
+  padding:var(--space-3) var(--space-4); border-bottom:1px solid var(--border);
+  background:var(--surface); flex:none;
+}
+.kg-title{ margin:0; font-size:var(--text-lg); white-space:nowrap; }
+.kg-tabs{ display:flex; gap:var(--space-1); }
+.kg-tab{
+  padding:var(--space-1) var(--space-3); font-size:var(--text-sm); color:var(--text-muted);
+  border:1px solid transparent; border-radius:var(--radius-full);
+}
+.kg-tab:hover{ color:var(--text); }
+.kg-tab.active{ color:var(--accent); border-color:var(--accent); font-weight:600; }
+.kg-header-spacer{ flex:1; }
+.kg-header-actions{ display:flex; align-items:center; gap:var(--space-1); }
+
+.kg-body{ flex:1; min-height:0; display:flex; }
+
+/* 左查询栏 */
+.kg-side{
+  width:240px; flex:none; border-right:1px solid var(--border);
+  padding:var(--space-3); overflow-y:auto; display:flex; flex-direction:column; gap:var(--space-4);
+  background:var(--surface);
+}
+.kg-search{ position:relative; }
+.kg-search-input{
+  width:100%; padding:var(--space-2) var(--space-3); border:1px solid var(--border);
+  border-radius:var(--radius-md); background:var(--bg); color:var(--text); font:inherit;
+}
+.kg-search-input:focus{ outline:none; border-color:var(--accent); }
+.kg-search-drop{
+  position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:5;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md);
+  box-shadow:var(--shadow-md); max-height:260px; overflow-y:auto;
+}
+.kg-search-item{ display:block; width:100%; text-align:left; padding:var(--space-2) var(--space-3); font-size:var(--text-sm); }
+.kg-search-item:hover{ background:var(--surface-2); }
+.kg-search-item .t{ color:var(--text-muted); font-size:var(--text-xs); margin-left:var(--space-1); }
+
+.kg-side-title{ font-size:var(--text-xs); font-weight:600; color:var(--text-muted); margin-bottom:var(--space-2); text-transform:uppercase; letter-spacing:.04em; }
+.kg-type{ display:flex; align-items:center; gap:var(--space-2); padding:3px 0; font-size:var(--text-sm); cursor:pointer; }
+.kg-type input{ accent-color:var(--accent); }
+.kg-type.off{ opacity:.45; }
+.kg-swatch{ width:.8rem; height:.8rem; border-radius:var(--radius-full); flex:none; }
+.kg-type-count{ margin-left:auto; color:var(--text-muted); font-size:var(--text-xs); }
+
+.kg-depth-row{ display:flex; align-items:center; gap:var(--space-2); font-size:var(--text-sm); }
+.kg-select{ padding:2px var(--space-2); border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font:inherit; }
+
+.kg-stats{ font-size:var(--text-sm); color:var(--text-muted); line-height:var(--leading-snug); }
+.kg-stats b{ color:var(--text); }
+.kg-trunc{ color:var(--danger); font-size:var(--text-xs); margin-top:var(--space-1); }
+
+/* 中图谱区 */
+.kg-canvas-wrap{ flex:1; min-width:0; position:relative; background:var(--bg-subtle); }
+.kg-canvas{ position:absolute; inset:0; }
+.kg-state{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--text-muted); pointer-events:none; }
+.kg-state.err{ color:var(--danger); }
+
+/* 右详情面板(滑出) */
+.kg-detail{
+  width:0; flex:none; overflow:hidden; border-left:1px solid var(--border);
+  background:var(--surface); transition:width .16s ease;
+}
+.kg-detail.open{ width:288px; }
+.kg-detail-inner{ width:288px; padding:var(--space-4); overflow-y:auto; height:100%; box-sizing:border-box; }
+.kg-detail-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:var(--space-2); }
+.kg-detail-name{ font-weight:600; font-size:var(--text-base); word-break:break-word; }
+.kg-badge{ display:inline-block; padding:.1rem .5rem; border-radius:var(--radius-full); font-size:var(--text-xs); color:#fff; margin-top:var(--space-1); }
+.kg-detail-field{ margin-top:var(--space-3); font-size:var(--text-sm); }
+.kg-detail-field .k{ color:var(--text-muted); font-size:var(--text-xs); display:block; margin-bottom:2px; }
+.kg-rel-list{ list-style:none; margin:var(--space-1) 0 0; padding:0; font-size:var(--text-sm); }
+.kg-rel-list li{ padding:3px 0; border-bottom:1px solid var(--border); word-break:break-word; }
+.kg-rel-arrow{ color:var(--accent); }
+.kg-detail-actions{ display:flex; flex-wrap:wrap; gap:var(--space-2); margin-top:var(--space-4); }
+
+@media (max-width:900px){
+  .kg-side{ width:180px; }
+  .kg-detail.open{ width:220px; }
+  .kg-detail-inner{ width:220px; }
+}

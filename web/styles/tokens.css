@@ -58,6 +58,13 @@
   --user-bubble-bg:#dbe4f0;       /* 浅:冷灰蓝,比原 surface-2 更深更冷 */
   --user-bubble-fg:#1e293b;       /* 对比 11.40:1(AAA) */
   --user-bubble-border:#c7d6ea;   /* 1px 同系边框,轻质感 */
+
+  /* 知识图谱实体类型分类调色板(8 色;canvas 不解析 CSS 变量,JS 渲染时经 getComputedStyle 解析为 hex)。
+     类型→色由 typeColorIndex(type) 确定性映射;品牌 teal 居首,其余为协调的中性饱和色。 */
+  --kg-cat-0:#0d9488; --kg-cat-1:#2563eb; --kg-cat-2:#d97706; --kg-cat-3:#7c3aed;
+  --kg-cat-4:#db2777; --kg-cat-5:#0891b2; --kg-cat-6:#65a30d; --kg-cat-7:#dc2626;
+  --kg-edge:#94a3b8;              /* 边默认色 */
+  --kg-faded:#cbd5e1;             /* 高亮子图时其余节点淡化色 */
 }
 
 /* ===== 暗色主题 ===== */
@@ -83,4 +90,10 @@ html[data-theme="dark"] {
   --user-bubble-bg:#243044;
   --user-bubble-fg:#e2e8f0;
   --user-bubble-border:#2f3e57;
+
+  /* 知识图谱分类色(暗色:略提亮以在深底图谱区可辨) */
+  --kg-cat-0:#2dd4bf; --kg-cat-1:#60a5fa; --kg-cat-2:#fbbf24; --kg-cat-3:#a78bfa;
+  --kg-cat-4:#f472b6; --kg-cat-5:#22d3ee; --kg-cat-6:#a3e635; --kg-cat-7:#f87171;
+  --kg-edge:#475569;
+  --kg-faded:#334155;
 }

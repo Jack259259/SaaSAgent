@@ -1,7 +1,7 @@
 // kb.js — 知识库管理(§12 item2 的 UI 化)API 客户端 + 角色门控/校验 + Alpine 模块。
 // 后端 /admin/kb/{kb}/*(内部管理员;IT 库叠加 internal 细 ACL,对齐红线 5/§9.1)。
 // 前端**不解析文档、不解压**——docx 解析与入库(ingest)在后端(红线 14);上传后触发 ingest 并轮询状态。
-// 「查看知识图谱」本段为占位(禁用 + TODO),真实功能在后续段实现。
+// 「查看知识图谱」按钮打开独立的知识图谱面板(knowledge-graph.js,经根组件 spread)。
 import { getUserCtx } from './sse.js';
 
 // 可管理知识库的角色(内部/管理员;与后端 auth._KB_ADMIN_ROLES 同口径)。
@@ -193,8 +193,6 @@ export function createKb() {
       try { await downloadKbDoc(this.kbTab, name); }
       catch (e) { this.kbError = kbErr(e); }
     },
-
-    viewKbGraph() { /* 占位:知识图谱在后续段实现(TODO) */ },
 
     kbFileExtHint() { return KB_FILE_EXTS.join(' / '); },
     kbFmtSize(n) { if (!n && n !== 0) return ''; if (n < 1024) return n + 'B'; if (n < 1048576) return (n / 1024).toFixed(1) + 'KB'; return (n / 1048576).toFixed(1) + 'MB'; },

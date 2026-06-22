@@ -19,10 +19,13 @@
 
   <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/app.css">
+  <link rel="stylesheet" href="styles/knowledge-graph.css">
   <link rel="stylesheet" href="vendor/highlight/github.min.css" id="hljs-theme">
+  <link rel="stylesheet" href="vendor/vis-network/vis-network.min.css">
   <script src="vendor/marked/marked.min.js"></script>
   <script src="vendor/highlight/highlight.min.js"></script>
   <script src="vendor/dompurify/purify.min.js"></script>
+  <script src="vendor/vis-network/vis-network.min.js"></script>
 </head>
 <body x-data="app" x-cloak>
   <!-- 共享文件选择(📎 触发) -->
@@ -385,7 +388,7 @@
           <button class="btn primary" type="button" :disabled="kbBusy" @click="$refs.kbFile.click()">上传文档</button>
           <input type="file" accept=".md,.markdown,.txt,.docx" class="file-input-hidden" x-ref="kbFile" @change="pickKbFile($event)">
           <button class="btn" type="button" :disabled="kbBusy" @click="triggerIngest(kbTab)">重新入库</button>
-          <button class="btn ghost" type="button" disabled title="知识图谱:后续版本上线(TODO)">查看知识图谱</button>
+          <button class="btn ghost" type="button" @click="openKnowledgeGraph(kbTab)">查看知识图谱</button>
           <span class="kb-ingest" x-show="kbIngest && kbIngest.status && kbIngest.status !== 'idle'"
                 :class="'ki-' + (kbIngest && kbIngest.status)" x-text="kbIngestLabel()"></span>
         </div>
@@ -416,6 +419,110 @@
           </div>
         </template>
       </div>
+    </div>
+  </div>
+
+  <!-- ===== 知识图谱 overlay(从知识库管理弹窗「查看知识图谱」打开;独立全屏)===== -->
+  <div class="kg-overlay" x-show="kgOpen" :class="{ 'kg-min': kgMinimized, 'kg-full': kgFullscreen }" x-transition.opacity
+       @keydown.escape.window="kgOpen && closeKnowledgeGraph()">
+    <div class="kg-header">
+      <h2 class="kg-title">知识图谱</h2>
+      <div class="kg-tabs" role="tablist">
+        <template x-for="t in kgTabs()" :key="t.id">
+          <button class="kg-tab" type="button" :class="{ active: kgKb === t.id }" @click="switchKgKb(t.id)" x-text="t.label"></button>
+        </template>
+      </div>
+      <div class="kg-header-spacer"></div>
+      <div class="kg-header-actions">
+        <button class="icon-btn" type="button" @click="refreshKg()" title="刷新" aria-label="刷新" x-html="icon('refresh-cw')"></button>
+        <button class="icon-btn" type="button" @click="exportKgPng()" title="导出 PNG" aria-label="导出 PNG" x-html="icon('download')"></button>
+        <button class="icon-btn" type="button" @click="toggleKgMinimize()" :title="kgMinimized ? '还原' : '最小化'" aria-label="最小化" x-html="icon('minus')"></button>
+        <button class="icon-btn" type="button" @click="toggleKgFullscreen()" :title="kgFullscreen ? '退出全屏' : '全屏'" aria-label="全屏" x-html="icon('maximize')"></button>
+        <button class="icon-btn" type="button" @click="closeKnowledgeGraph()" title="关闭" aria-label="关闭" x-html="icon('x')"></button>
+      </div>
+    </div>
+
+    <div class="kg-body">
+      <!-- 左查询栏 -->
+      <aside class="kg-side">
+        <div class="kg-search">
+          <input class="kg-search-input" type="text" x-model="kgSearchQuery" @input="onKgSearch()" placeholder="搜索实体…" aria-label="搜索实体">
+          <div class="kg-search-drop" x-show="kgSearchResults.length" @click.outside="kgSearchResults = []">
+            <template x-for="ent in kgSearchResults" :key="ent.entity_id">
+              <button class="kg-search-item" type="button" @click="pickKgSearch(ent)">
+                <span x-text="ent.name || ent.entity_id"></span><span class="t" x-text="ent.entity_type || ''"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <div>
+          <div class="kg-side-title">实体类型</div>
+          <template x-for="tc in kgTypeCounts()" :key="tc.type">
+            <label class="kg-type" :class="{ off: kgHiddenTypes.includes(tc.type) }">
+              <input type="checkbox" :checked="!kgHiddenTypes.includes(tc.type)" @change="toggleKgType(tc.type)">
+              <span class="kg-swatch" :style="'background:' + kgTypeColorVar(tc.type)"></span>
+              <span x-text="tc.type"></span>
+              <span class="kg-type-count" x-text="tc.count"></span>
+            </label>
+          </template>
+          <div style="color:var(--text-muted);font-size:var(--text-sm)" x-show="!kgTypeCounts().length && !kgLoading">暂无类型</div>
+        </div>
+
+        <div class="kg-depth-row">
+          <span>展开深度</span>
+          <select class="kg-select" x-model.number="kgDepth">
+            <option :value="1">1</option><option :value="2">2</option><option :value="3">3</option>
+          </select>
+        </div>
+
+        <div class="kg-stats">
+          <div>节点 <b x-text="kgStats.total_nodes"></b> · 关系 <b x-text="kgStats.total_edges"></b></div>
+          <div x-show="kgStats.entity_types && kgStats.entity_types.length">类型 <b x-text="(kgStats.entity_types || []).length"></b> 种</div>
+          <div class="kg-trunc" x-show="kgIsTruncated">⚠ 大图已截断(按度 top-N);搜索实体可聚焦子图</div>
+        </div>
+      </aside>
+
+      <!-- 中图谱区 -->
+      <div class="kg-canvas-wrap">
+        <div class="kg-canvas" x-ref="kgCanvas"></div>
+        <div class="kg-state" x-show="kgLoading">加载中…</div>
+        <div class="kg-state err" x-show="kgError" x-text="kgError"></div>
+        <div class="kg-state" x-show="!kgLoading && !kgError && !kgRawNodes.length">该知识库暂无图谱数据(需先入库建图)。</div>
+      </div>
+
+      <!-- 右详情面板(点节点滑出)-->
+      <aside class="kg-detail" :class="{ open: kgDetailOpen && kgSelected }">
+        <div class="kg-detail-inner" x-show="kgSelected">
+          <div class="kg-detail-head">
+            <div>
+              <div class="kg-detail-name" x-text="kgSelected && (kgSelected.name || kgSelected.entity_id)"></div>
+              <span class="kg-badge" x-show="kgSelected && kgSelected.entity_type" :style="'background:' + (kgSelected ? kgTypeColorVar(kgSelected.entity_type) : '')" x-text="kgSelected && kgSelected.entity_type"></span>
+            </div>
+            <button class="icon-btn" type="button" @click="kgDetailOpen = false; kgSelected = null; _clearHighlight()" aria-label="关闭详情" x-html="icon('x')"></button>
+          </div>
+          <div class="kg-detail-field" x-show="kgSelected && kgSelected.description">
+            <span class="k">描述</span><span x-text="kgClean(kgSelected && kgSelected.description)"></span>
+          </div>
+          <div class="kg-detail-field" x-show="kgSelected && kgSelected.source">
+            <span class="k">来源</span><span x-text="kgClean(kgSelected && kgSelected.source)"></span>
+          </div>
+          <div class="kg-detail-field">
+            <span class="k">关联关系</span>
+            <ul class="kg-rel-list">
+              <template x-for="(r, ri) in kgSelectedRelations()" :key="ri">
+                <li><span x-text="r.source"></span> <span class="kg-rel-arrow" x-text="'→[' + r.rel + ']→'"></span> <span x-text="r.target"></span></li>
+              </template>
+            </ul>
+            <div x-show="!kgSelectedRelations().length" style="color:var(--text-muted);font-size:var(--text-sm)">无</div>
+          </div>
+          <div class="kg-detail-actions">
+            <button class="btn sm" type="button" @click="expandKgNode(kgSelected.entity_id)">展开邻居</button>
+            <button class="btn sm" type="button" @click="highlightSubgraph(kgSelected.entity_id)">高亮子图</button>
+            <button class="btn sm ghost" type="button" disabled title="查看原文:契约暂无按 chunk_ref 读原文的端点(见 backend-gaps)">查看原文</button>
+          </div>
+        </div>
+      </aside>
     </div>
   </div>
 

@@ -5,6 +5,7 @@
 import { handleSkills } from './mock-skills.js';
 import { handleRepos } from './mock-repos.js';
 import { handleKb } from './mock-kb.js';
+import { handleKbGraph } from './mock-kb-graph.js';
 
 /** 显式开关:?mock=1 / localStorage fp_mock='1' 强开;'0' 强关;未显式返回 null(由 /healthz 探测决定)。 */
 export function mockForced() {
@@ -256,6 +257,8 @@ export async function installMockSSE() {
     if (sk) return sk;
     const rp = handleRepos(method, path, init); // /admin/repos*(代码仓管理)
     if (rp) return rp;
+    const kgr = handleKbGraph(method, url, init); // /admin/kb/graph*(图谱;须先于 handleKb,带 query)
+    if (kgr) return kgr;
     const kbr = handleKb(method, path, init); // /admin/kb/*(知识库管理)
     if (kbr) return kbr;
     return original(input, init);
