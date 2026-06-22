@@ -20,6 +20,8 @@ from orchestrator import anonymous_who, emit_audit, who_from_user_ctx
 
 # 代码仓管理可用角色(内部 / 管理员;租户业务用户无)。与前端 repos.js 同口径。
 _REPO_ADMIN_ROLES = {"admin", "repo_admin", "internal", "internal_support", "internal_dev"}
+# 知识库管理可用角色(内部 / 管理员;租户业务用户无)。与前端 kb.js 同口径。
+_KB_ADMIN_ROLES = {"admin", "kb_admin", "internal", "internal_support", "internal_dev"}
 
 
 def get_trace_id(x_trace_id: Annotated[str | None, Header()] = None) -> str:
@@ -66,6 +68,28 @@ def require_repo_admin(
         emit_audit(
             who=who_from_user_ctx(user_ctx),
             tool="repo_admin",
+            args_digest="-",
+            result_status=ResultStatus.denied,
+            trace_id=trace_id,
+            error_code=ErrorCode.NO_PERMISSION,
+        )
+        raise HTTPException(status_code=403, detail="需要内部管理员角色")
+    return user_ctx
+
+
+def require_kb_admin(
+    trace_id: Annotated[str, Depends(get_trace_id)],
+    user_ctx: Annotated[UserCtx, Depends(require_user_ctx)],
+) -> UserCtx:
+    """知识库管理:内部管理员角色(红线 3/9)。缺 ctx→401,非管理员→403 + denied 审计。
+
+    不设功能开关(无子进程、低风险);IT 设计库的细 ACL(仅内部角色)在端点层叠加
+    (rag_svc.acl.is_internal,对齐红线 5/§9.1)。
+    """
+    if not (set(user_ctx.roles) & _KB_ADMIN_ROLES):
+        emit_audit(
+            who=who_from_user_ctx(user_ctx),
+            tool="kb_admin",
             args_digest="-",
             result_status=ResultStatus.denied,
             trace_id=trace_id,

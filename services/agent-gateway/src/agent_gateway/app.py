@@ -33,9 +33,10 @@ from orchestrator import (
 )
 from orchestrator.injection import opening_system_prompt
 from orchestrator.skills import SkillIndex
+from rag_svc import acl as rag_acl
 
-from . import repos
-from .auth import get_trace_id, require_repo_admin, require_user_ctx
+from . import kb, repos
+from .auth import get_trace_id, require_kb_admin, require_repo_admin, require_user_ctx
 from .deps import (
     get_memory_service,
     get_provider,
@@ -266,6 +267,132 @@ async def repos_upload(
         return _repo_op("upload", user_ctx, trace_id, op)
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+# ── 知识库管理(/admin/kb;内部管理员 + IT 库细 ACL)──────────────────────────────
+# 文档列举/上传/下载 + 入库(ingest)触发。写操作全量审计(红线 3/9);ingest 进程内异步(见 kb.py,
+# 无子进程 → 无命令注入)。it_design 库再叠加 is_internal(红线 5/§9.1)。必须注册在下方 SPA
+# 捕获路由之前(GET 路由顺序优先)。上传上限 = kb.MAX_DOC_BYTES(单一事实源)。
+
+
+def _kb_audit(user_ctx: UserCtx, trace_id: str, action: str, status: ResultStatus) -> None:
+    emit_audit(
+        who=who_from_user_ctx(user_ctx),
+        tool=f"kb_admin:{action}",
+        args_digest="-",  # 不记文件名原文(§6)
+        result_status=status,
+        trace_id=trace_id,
+    )
+
+
+def _kb_op[T](
+    action: str, user_ctx: UserCtx, trace_id: str, fn: Callable[[], T]
+) -> T | JSONResponse:
+    try:
+        result = fn()
+    except kb.KbError as exc:
+        _kb_audit(user_ctx, trace_id, action, ResultStatus.error)
+        return JSONResponse(
+            status_code=exc.http_status, content={"code": exc.code, "message": str(exc)}
+        )
+    _kb_audit(user_ctx, trace_id, action, ResultStatus.ok)
+    return result
+
+
+def _check_kb_access(kb_name: str, user_ctx: UserCtx, trace_id: str) -> None:
+    """IT 设计库细 ACL:仅内部角色(红线 5/§9.1)。其余库放行;库合法性由各 op 校验(→ INVALID_KB)。"""
+    if kb_name == rag_acl.KB_IT_DESIGN and not rag_acl.is_internal(user_ctx):
+        _kb_audit(user_ctx, trace_id, "access_it_design", ResultStatus.denied)
+        raise HTTPException(status_code=403, detail="IT 设计库仅内部角色可访问")
+
+
+@app.get("/admin/kb/{kb_name}/docs", response_model=None)
+async def kb_list_docs(
+    kb_name: str,
+    user_ctx: Annotated[UserCtx, Depends(require_kb_admin)],
+    trace_id: Annotated[str, Depends(get_trace_id)],
+) -> list[dict[str, Any]] | JSONResponse:
+    _check_kb_access(kb_name, user_ctx, trace_id)
+    return _kb_op("list", user_ctx, trace_id, lambda: kb.list_docs(kb_name))
+
+
+@app.post("/admin/kb/{kb_name}/upload", response_model=None)
+async def kb_upload(
+    kb_name: str,
+    user_ctx: Annotated[UserCtx, Depends(require_kb_admin)],
+    trace_id: Annotated[str, Depends(get_trace_id)],
+    file: Annotated[UploadFile, File()],
+) -> dict[str, Any] | JSONResponse:
+    """上传 .md/.markdown/.txt/.docx(扩展名 + MIME + 大小 + 解析校验)。前端不解析(红线 14)。"""
+    _check_kb_access(kb_name, user_ctx, trace_id)
+    try:
+        kb.validate_kb(kb_name)
+        name = kb.sanitize_doc_name(file.filename or "")
+    except kb.KbError as exc:
+        _kb_audit(user_ctx, trace_id, "upload", ResultStatus.error)
+        return JSONResponse(
+            status_code=exc.http_status, content={"code": exc.code, "message": str(exc)}
+        )
+    if not kb.is_allowed_mime(file.content_type):
+        _kb_audit(user_ctx, trace_id, "upload", ResultStatus.denied)
+        return JSONResponse(
+            status_code=400, content={"code": "INVALID_INPUT", "message": "不支持的 MIME 类型"}
+        )
+    tmpdir = Path(tempfile.mkdtemp(prefix="kb-upload-"))
+    tmp = tmpdir / ("upload" + Path(name).suffix)  # 后缀需与目标一致,供 parse_document 分派
+    try:
+        size = 0
+        with open(tmp, "wb") as out:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > kb.MAX_DOC_BYTES:
+                    _kb_audit(user_ctx, trace_id, "upload", ResultStatus.error)
+                    return JSONResponse(
+                        status_code=413, content={"code": "TOO_LARGE", "message": "文件超过上限"}
+                    )
+                out.write(chunk)
+        return _kb_op("upload", user_ctx, trace_id, lambda: kb.save_upload(kb_name, name, tmp))
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+@app.get("/admin/kb/{kb_name}/docs/{name}/download", response_model=None)
+async def kb_download(
+    kb_name: str,
+    name: str,
+    user_ctx: Annotated[UserCtx, Depends(require_kb_admin)],
+    trace_id: Annotated[str, Depends(get_trace_id)],
+) -> FileResponse | JSONResponse:
+    _check_kb_access(kb_name, user_ctx, trace_id)
+    try:
+        path = kb.resolve_download(kb_name, name)
+    except kb.KbError as exc:
+        _kb_audit(user_ctx, trace_id, "download", ResultStatus.error)
+        return JSONResponse(
+            status_code=exc.http_status, content={"code": exc.code, "message": str(exc)}
+        )
+    _kb_audit(user_ctx, trace_id, "download", ResultStatus.ok)
+    return FileResponse(path, filename=path.name)
+
+
+@app.post("/admin/kb/{kb_name}/ingest", response_model=None)
+async def kb_ingest(
+    kb_name: str,
+    user_ctx: Annotated[UserCtx, Depends(require_kb_admin)],
+    trace_id: Annotated[str, Depends(get_trace_id)],
+) -> dict[str, Any] | JSONResponse:
+    _check_kb_access(kb_name, user_ctx, trace_id)
+    return _kb_op("ingest", user_ctx, trace_id, lambda: kb.start_ingest(kb_name))
+
+
+@app.get("/admin/kb/{kb_name}/ingest/status", response_model=None)
+async def kb_ingest_status(
+    kb_name: str,
+    user_ctx: Annotated[UserCtx, Depends(require_kb_admin)],
+    trace_id: Annotated[str, Depends(get_trace_id)],
+) -> dict[str, Any] | JSONResponse:
+    _check_kb_access(kb_name, user_ctx, trace_id)
+    return _kb_op("ingest_status", user_ctx, trace_id, lambda: kb.ingest_status(kb_name))
 
 
 # ── 内嵌前端静态伺服 + SPA 回退(§10;唯一的前端相关后端改动)──────────────────
