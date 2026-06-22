@@ -39,7 +39,7 @@ async def ingest_dir(
     for path in files:
         parsed = parse_document(path)
         if parsed is None:
-            continue  # 不支持的类型(docx/pdf 当前)
+            continue  # 不支持/损坏的类型(pdf 当前;损坏 docx 等)
         rel = path.relative_to(src).as_posix()
         digest = _sha256(path)
         if store.file_hash(rel) == digest:
