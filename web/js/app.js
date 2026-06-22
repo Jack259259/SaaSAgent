@@ -5,6 +5,7 @@ import { createChat } from './chat.js';
 import { createAttachments } from './attachments.js';
 import { createSkills } from './skills.js';
 import { createRepos } from './repos.js';
+import { createKb } from './kb.js';
 import { setUserCtx } from './sse.js';
 
 // 异步装载 mock:探测 /healthz,真实后端(agent-gateway)在则不装(fire-and-forget,首次发送前完成)。
@@ -34,6 +35,7 @@ document.addEventListener('alpine:init', () => {
     ...createAttachments(),
     ...createSkills(),
     ...createRepos(),
+    ...createKb(),
 
     init() {
       applyHljsTheme(this.theme);

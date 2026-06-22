@@ -20,7 +20,7 @@
   /* 字号(模块化)与行高 */
   --text-xs:.75rem; --text-sm:.875rem; --text-base:1rem; --text-lg:1.125rem;
   --text-xl:1.375rem; --text-2xl:1.75rem;
-  --leading-tight:1.25; --leading-normal:1.6;
+  --leading-tight:1.25; --leading-snug:1.5; --leading-normal:1.6;
 
   /* 字体族(自托管,见 vendor/README.md) */
   --font-sans:'Inter', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
@@ -50,6 +50,10 @@
   /* W1 消息 / 流式 */
   --cursor:var(--accent);
 
+  /* 文本选中高亮(令牌化;半透明品牌色 → 彩色用户气泡上亦清晰可见) */
+  --selection-bg:rgba(13,148,136,.25);
+  --selection-fg:var(--gray-900);
+
   /* 用户气泡(石板蓝 · 冷调科技感;令牌化,组件不写死;明暗均 WCAG AAA) */
   --user-bubble-bg:#dbe4f0;       /* 浅:冷灰蓝,比原 surface-2 更深更冷 */
   --user-bubble-fg:#1e293b;       /* 对比 11.40:1(AAA) */
@@ -70,6 +74,10 @@ html[data-theme="dark"] {
   --accent-contrast:var(--gray-950);
   --danger:#f87171;
   --shadow-md:0 4px 16px rgba(0,0,0,.45);
+
+  /* 文本选中高亮(暗色:半透品牌青) */
+  --selection-bg:rgba(45,212,191,.30);
+  --selection-fg:var(--gray-100);
 
   /* 用户气泡(深色:半透深蓝底,对比 10.77:1 AAA) */
   --user-bubble-bg:#243044;

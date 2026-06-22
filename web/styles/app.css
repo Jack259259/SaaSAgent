@@ -103,19 +103,26 @@ a{color:var(--accent);}
 /* message blocks */
 .msg{display:flex;}
 .msg-user{justify-content:flex-end;}
-.msg-user .msg-inner{max-width:85%;}
+.msg-user .msg-inner{max-width:85%;display:flex;flex-direction:column;align-items:flex-end;}
 .msg-assistant .msg-inner{width:100%;}
 .msg-body{word-break:break-word;user-select:text;-webkit-user-select:text;}
 .user-body{
   background:var(--user-bubble-bg);color:var(--user-bubble-fg);
   border:1px solid var(--user-bubble-border);
-  padding:var(--space-3) var(--space-4);
-  border-radius:var(--radius-lg);white-space:pre-wrap;user-select:text;-webkit-user-select:text;
+  padding:var(--space-2) var(--space-4);max-width:100%;
+  border-radius:var(--radius-lg);line-height:var(--leading-snug);
+  white-space:pre-wrap;user-select:text;-webkit-user-select:text;
 }
 .assistant-body{padding:var(--space-1) 0;user-select:text;-webkit-user-select:text;}
 .stream-text{white-space:pre-wrap;user-select:text;-webkit-user-select:text;}
 .md{user-select:text;-webkit-user-select:text;}
 .user-text{user-select:text;-webkit-user-select:text;}
+
+/* 文本选中高亮(令牌化;明暗主题随令牌切换,彩色气泡上亦清晰)。
+   注:::selection 与 ::-moz-selection 必须分两条规则——合并到一个选择器列表里,
+   浏览器遇到不识别的伪元素会丢弃整条规则。 */
+::selection{background:var(--selection-bg);color:var(--selection-fg);}
+::-moz-selection{background:var(--selection-bg);color:var(--selection-fg);}
 
 /* 消息操作栏(默认低调但**始终可见**,hover 该消息时增强;对齐 claude.ai)。
    注:此前 opacity:0 仅 hover 浮现 → 不悬停时完全不可见,易被误判"未实现";改为常显低调。
@@ -443,3 +450,18 @@ a{color:var(--accent);}
 .repo-cred-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);padding:var(--space-5);width:min(420px,92vw);display:flex;flex-direction:column;gap:var(--space-3);}
 .repo-cred-modal h3{margin:0;}
 .repo-cred-tip{margin:0;font-size:var(--text-sm);color:var(--text-muted);}
+
+/* 知识库管理面板(复用 .skills-overlay/.repo-table)*/
+.kb-tabs{display:flex;gap:var(--space-1);padding:0 var(--space-5);border-bottom:1px solid var(--border);background:var(--surface);}
+.kb-tab{padding:var(--space-3) var(--space-4);font-size:var(--text-sm);color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;}
+.kb-tab:hover{color:var(--text);}
+.kb-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+.kb-actions{display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2);margin-bottom:var(--space-2);}
+.kb-ingest{font-size:var(--text-sm);padding:.1rem .5rem;border-radius:var(--radius-full);border:1px solid var(--border);color:var(--text-muted);}
+.kb-ingest.ki-running{color:var(--accent);border-color:var(--accent);}
+.kb-ingest.ki-done{color:var(--brand-700);border-color:var(--brand-600);}
+.kb-ingest.ki-failed{color:var(--danger);border-color:var(--danger);}
+.kb-table .repo-row{grid-template-columns:1.6fr .7fr 1.1fr .8fr auto;}
+.kb-status{font-size:var(--text-xs);}
+.kb-status.ok{color:var(--brand-700);}
+.kb-status.pending{color:var(--text-muted);}

@@ -4,6 +4,7 @@
 // W3 关闭(localStorage fp_mock='0')后相对路径直连真实后端,前端零改动。
 import { handleSkills } from './mock-skills.js';
 import { handleRepos } from './mock-repos.js';
+import { handleKb } from './mock-kb.js';
 
 /** 显式开关:?mock=1 / localStorage fp_mock='1' 强开;'0' 强关;未显式返回 null(由 /healthz 探测决定)。 */
 export function mockForced() {
@@ -255,6 +256,8 @@ export async function installMockSSE() {
     if (sk) return sk;
     const rp = handleRepos(method, path, init); // /admin/repos*(代码仓管理)
     if (rp) return rp;
+    const kbr = handleKb(method, path, init); // /admin/kb/*(知识库管理)
+    if (kbr) return kbr;
     return original(input, init);
   };
 

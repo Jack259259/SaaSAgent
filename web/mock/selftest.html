@@ -39,6 +39,8 @@
     import { createConversationStore, groupByTime } from '../js/store.js';
     import { canManageSkills, validateSkillName, validateSkillZip, splitFrontmatter, SKILL_ZIP_LIMITS, listSkills, createSkill, setSkillStatus, uploadSkillZip, createSkills } from '../js/skills.js';
     import { canManageRepos, validateRepoName, validateRepoUrl, validateRepoArchive, createRepos } from '../js/repos.js';
+    import { canManageKb, isKbInternal, validateKbName, validateKbFile, ingestLabel, isIngestPolling, listKbDocs, uploadKbDoc, ingestKb, ingestStatus, createKb, KB_UPLOAD_LIMIT } from '../js/kb.js';
+    import { _resetKb } from './mock-kb.js';
 
     const results = [];
     const assert = (name, cond) => results.push({ name, ok: !!cond });
@@ -421,6 +423,22 @@
     assert('color: .user-body 已不再用旧 surface-2 浅灰(#F1F5F9)', _ubcs.backgroundColor !== 'rgb(241, 245, 249)');
     _ub.remove();
 
+    // ===== 用户气泡紧凑高度 + 选中高亮(本次改动锁)=====
+    const _ubP = document.createElement('div'); _ubP.className = 'msg-body user-body';
+    _ubP.style.width = '200px'; _ubP.textContent = '单行';
+    document.body.appendChild(_ubP);
+    const _ubPcs = getComputedStyle(_ubP);
+    assert('bubble: user-body 无固定 min-height(auto/0)', ['auto', '0px'].includes(_ubPcs.minHeight));
+    assert('bubble: user-body 紧凑纵向内边距(上=下且纵<横)',
+      _ubPcs.paddingTop === _ubPcs.paddingBottom && parseFloat(_ubPcs.paddingTop) < parseFloat(_ubPcs.paddingLeft));
+    const _h1 = _ubP.getBoundingClientRect().height;
+    _ubP.textContent = '第一行\n第二行\n第三行';        // .user-body 为 pre-wrap,\n 真换行
+    const _h3 = _ubP.getBoundingClientRect().height;
+    assert('bubble: 高度随内容撑开(三行>单行 → 无固定高度)', _h3 > _h1);
+    _ubP.remove();
+    assert('select: ::selection 高亮令牌已定义(--selection-bg/fg)',
+      cs.getPropertyValue('--selection-bg').trim().length > 0 && cs.getPropertyValue('--selection-fg').trim().length > 0);
+
     // ===== 代码仓管理:角色门控 / 校验 / 状态机 / 合并防撞 =====
     setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['internal_dev'], data_scope: {}, permissions: ['*'] });
     const _cRepo = createRepos();
@@ -442,6 +460,57 @@
     const _repoKeys = Object.keys(createRepos());
     const _otherForRepo = new Set([...Object.keys(createSkills()), ...Object.keys(createChat())]);
     assert('merge: repos 方法不与 skills/chat 同名(防合并覆盖)', _repoKeys.every((k) => !_otherForRepo.has(k)));
+
+    // ===== 知识库管理:角色门控 / 页签门控 / 校验 / ingest 状态机 / API / 合并防撞 =====
+    // 角色门控(管理入口):仅内部管理员可见。
+    assert('kb: canManageKb 角色门控', canManageKb(['analyst']) === false && canManageKb(['tenant_user']) === false && canManageKb(['kb_admin']) === true && canManageKb(['internal_dev']) === true);
+    assert('kb: isKbInternal(IT 页签门控)', isKbInternal(['kb_admin']) === false && isKbInternal(['internal_dev']) === true && isKbInternal(['admin']) === false);
+
+    // kbAdmin()/kbInternal()/kbTabs() 随 user_ctx 投影(双保险)。
+    const _kbC = createKb();
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['kb_admin'], data_scope: {}, permissions: [] });
+    assert('kb: kbAdmin 管理员→true、kbInternal 非内部→false', _kbC.kbAdmin() === true && _kbC.kbInternal() === false);
+    assert('kb: kbTabs 非内部仅业务库(IT 页签隐藏)', _kbC.kbTabs().length === 1 && _kbC.kbTabs()[0].id === 'business');
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['internal_dev'], data_scope: {}, permissions: [] });
+    assert('kb: kbTabs 内部角色含 IT 页签', _kbC.kbTabs().length === 2 && _kbC.kbTabs().some((t) => t.id === 'it_design'));
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['analyst'], data_scope: {}, permissions: [] });
+    assert('kb: kbAdmin 非授权→false', _kbC.kbAdmin() === false);
+    // switchKbTab 双保险:非内部点 IT 页签不切换。
+    _kbC.kbTab = 'business'; _kbC.switchKbTab('it_design');
+    assert('kb: switchKbTab 非内部点 IT 不切换', _kbC.kbTab === 'business');
+
+    // 文件名 / 文件校验(与后端 sanitize_doc_name / 扩展名白名单同口径)。
+    assert('kb: validateKbName 拒穿越/分隔符', validateKbName('../evil.md').ok === false && validateKbName('a/b.md').ok === false && validateKbName('a\\b.md').ok === false && validateKbName('').ok === false);
+    assert('kb: validateKbName 允许 unicode 名', validateKbName('资金计划 v1.docx').ok === true);
+    assert('kb: validateKbFile 扩展名白名单', validateKbFile({ name: 'a.md', size: 10 }).ok === true && validateKbFile({ name: 'a.docx', size: 10 }).ok === true && validateKbFile({ name: 'a.txt', size: 10 }).ok === true && validateKbFile({ name: 'a.pdf', size: 10 }).ok === false && validateKbFile({ name: 'a.exe', size: 10 }).ok === false);
+    assert('kb: validateKbFile 超大小拒', validateKbFile({ name: 'a.md', size: KB_UPLOAD_LIMIT.maxBytes + 1 }).ok === false);
+
+    // ingest 状态机(纯函数)。
+    assert('kb: isIngestPolling 仅 running 续轮询', isIngestPolling('running') === true && isIngestPolling('done') === false && isIngestPolling('failed') === false && isIngestPolling('idle') === false);
+    assert('kb: ingestLabel 文案', ingestLabel('running') === '入库中…' && ingestLabel('done') === '入库完成' && ingestLabel('failed') === '入库失败' && ingestLabel('idle') === '未入库');
+
+    // API(mock):内部角色全流程 + IT 库细 ACL。
+    _resetKb();
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['internal_dev'], data_scope: {}, permissions: [] });
+    await assertAsync('kb api: list 返回数组', async () => Array.isArray(await listKbDocs('business')));
+    await assertAsync('kb api: upload .md 成功入列表', async () => { const r = await uploadKbDoc('business', new File(['# x'], 'guide.md', { type: 'text/markdown' })); return r.name === 'guide.md' && r.indexed === false; });
+    await assertAsync('kb api: upload 非法扩展名→400', async () => { try { await uploadKbDoc('business', new File(['x'], 'evil.exe', { type: 'application/octet-stream' })); return false; } catch (e) { return e.status === 400 && e.code === 'INVALID_INPUT'; } });
+    await assertAsync('kb api: ingest 返回 task_id + running', async () => { const r = await ingestKb('business'); return r.status === 'running' && !!r.task_id; });
+    await assertAsync('kb api: ingest 轮询 running→done 且 indexed 翻新', async () => { const s = await ingestStatus('business'); const docs = await listKbDocs('business'); return s.status === 'done' && docs[0].indexed === true; });
+    await assertAsync('kb api: 下载已上传文档 200', async () => { const ctx = { tenant_id: 't', user_id: 'u', roles: ['internal_dev'], data_scope: {}, permissions: [] }; const res = await fetch('/admin/kb/business/docs/guide.md/download', { headers: { 'X-User-Ctx': JSON.stringify(ctx) } }); return res.ok; });
+    await assertAsync('kb api: 非法 kb→404 INVALID_KB(防注入)', async () => { try { await listKbDocs('evil'); return false; } catch (e) { return e.status === 404 && e.code === 'INVALID_KB'; } });
+
+    // IT 库细 ACL:非内部管理员→403;内部→200。
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['kb_admin'], data_scope: {}, permissions: [] });
+    await assertAsync('kb api: 非内部访 it_design→403', async () => { try { await listKbDocs('it_design'); return false; } catch (e) { return e.status === 403; } });
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['internal_dev'], data_scope: {}, permissions: [] });
+    await assertAsync('kb api: 内部访 it_design→200', async () => Array.isArray(await listKbDocs('it_design')));
+    setUserCtx(null);
+
+    // 合并防撞:kb 方法不得与 chat/skills/repos 同名(同根组件 ...spread 合并)。
+    const _kbKeys = Object.keys(createKb());
+    const _otherForKb = new Set([...Object.keys(createSkills()), ...Object.keys(createChat()), ...Object.keys(createRepos())]);
+    assert('merge: kb 方法不与 skills/chat/repos 同名(防合并覆盖)', _kbKeys.every((k) => !_otherForKb.has(k)));
 
     // ===== 渲染结果 =====
     const passed = results.filter((r) => r.ok).length;
