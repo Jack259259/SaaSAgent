@@ -64,3 +64,11 @@ API(对齐设计 §8.5.4):
 
 - **`/admin/repos*`(已实现)**:`agent-gateway` 已落地代码仓管理端点(list/clone/upload/delete/update),内部管理员 + 功能开关 `FP_REPO_ADMIN=1` + 主机白名单 `FP_REPO_GIT_HOSTS` + 审计;git/解压/索引硬化见 `services/agent-gateway/src/agent_gateway/repos.py`,UI 见 `web/`「代码仓管理」面板。详见 `docs/integration/code-repos.md §6`。
 - **安全解压已就位**:`packages/common/src/common/safe_extract.py`(防 zip-slip/炸弹/符号链接,支持 zip+tar 系)。**§E 的 `/skills/upload` 安全解压可直接复用此模块**,无需再造;后端实现 `/skills/upload` 时调用 `safe_extract(...)` 即满足红线 11/14 的解压安全要求。
+
+## H. 知识库管理(已实现)
+
+- **`/admin/kb/{kb}/*`(已实现)**:`agent-gateway` 已落地知识库管理端点(docs 列举 / upload / download / ingest / ingest status),内部管理员鉴权(`require_kb_admin`)+ IT 设计库细 ACL(仅内部角色,`rag_svc.acl.is_internal`,红线 5/§9.1)+ 写操作审计。实现见 `services/agent-gateway/src/agent_gateway/kb.py`,UI 见 `web/`「知识库管理」面板(`web/js/kb.js`)。详见 `docs/integration/knowledge-management.md`。
+  - **ingest 进程内异步**:`asyncio.run(ingest_dir(...))` 后台线程执行(**无子进程 / 无 shell**;kb 取自枚举、src 取自固定映射 → 命令注入面为零),同库串行(运行中再触发 → 409),job 注册表供 `GET .../ingest/status` 轮询。
+  - **文档落盘** `data/knowledge/{business|it-design}/`(env `FP_KNOWLEDGE_DIR` 可覆盖);文件名取 basename + 扩展名白名单(`.md/.markdown/.txt/.docx`)+ realpath 父目录校验(防穿越)+ 25MB 上限 + `parse_document` 试解析(损坏即拒)。
+- **`.docx` 解析已就位(ingest 路径)**:`rag_svc.chunking.parse_document` 现支持 `.docx`(零依赖 stdlib `zipfile`+`xml.etree`,段落保序 + 表格转 Markdown)。**注意:此为知识库 ingest 路径**;§B 的 `parse_user_file`(聊天附件解析)DOCX 仍待补,可复用 `rag_svc.chunking._docx_to_text`。
+- **知识图谱**:前端「查看知识图谱」按钮当前为占位(禁用 + TODO),真实功能(知识图谱构建/可视化)单独成段实现。

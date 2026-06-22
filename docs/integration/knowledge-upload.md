@@ -3,10 +3,14 @@
 知识文档由**人工上传**到 `data/knowledge/{business,it_design}/`,再运行 `ingest` 构建索引。
 **真实业务文档不入库**(`data/` 除 README 外被 .gitignore 忽略)。
 
+> 也可经内嵌前端「知识库管理」面板(内部管理员)上传 + 一键入库,免手工命令;
+> 端点与安全见 `docs/integration/knowledge-management.md`。CLI 仍是租户私有/子目录语料的入口。
+
 ## 目录与命名
 
 - 业务知识 → `data/knowledge/business/`;IT 设计文档 → `data/knowledge/it-design/`(对应 kb=`it_design`)。
-- 文件名用有意义的英文/拼音 + 扩展名;**当前支持 `.md` / `.markdown` / `.txt`**(docx/pdf 解析器待接入,见 chunking.py TODO)。
+- 文件名用有意义的英文/拼音 + 扩展名;**当前支持 `.md` / `.markdown` / `.txt` / `.docx`**(pdf 解析器待接入,见 chunking.py TODO)。
+- **`.docx`**:零依赖解析(stdlib OOXML),抽取段落(保序)+ 表格(转 Markdown);无 front-matter,元数据取库默认。复杂排版(图片/文本框/批注)忽略。损坏文件在 ingest 时跳过、不中断整批。
 
 ## front-matter 元数据格式(放文件顶部)
 
