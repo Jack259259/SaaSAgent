@@ -14,6 +14,8 @@
 | highlight.js theme(亮) | 11.9.0 | BSD-3-Clause | `highlight/github.min.css` | `.../@highlightjs/cdn-assets@11.9.0/styles/github.min.css` |
 | highlight.js theme(暗) | 11.9.0 | BSD-3-Clause | `highlight/github-dark.min.css` | `.../@highlightjs/cdn-assets@11.9.0/styles/github-dark.min.css` |
 | DOMPurify | 3.1.6 | Apache-2.0 OR MPL-2.0 | `dompurify/purify.min.js` | `https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js` |
+| vis-network | 9.1.9 | MIT OR Apache-2.0 | `vis-network/vis-network.min.js` | `https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js` |
+| vis-network theme | 9.1.9 | MIT OR Apache-2.0 | `vis-network/vis-network.min.css` | `https://cdn.jsdelivr.net/npm/vis-network@9.1.9/styles/vis-network.min.css` |
 | Lucide(图标) | — | ISC | `lucide/icons.js`(内联 SVG,手工取路径) | https://lucide.dev (ISC) |
 
 > Lucide 仅取所需图标(menu / sun / moon)的 SVG 路径数据内联到 `lucide/icons.js`,未引入其 npm 包,避免整包体积。
@@ -34,6 +36,8 @@ highlight.min.js                       837A6FA5B0C736B52BBDE2B2B6190F305DA3FC9ED
 highlight/github.min.css               3A9A5DEF8B9C311E5AE43ABDE85C63133185EED4F0D9F67FEA4B00A8308CF066
 highlight/github-dark.min.css          9F208D022102B1D0C7AEBFECD8E42CA7997D5DE636649D2B31EA63093D809019
 dompurify/purify.min.js                C0845096A7C4A6741F362AC506C94C1C7D27DC603BCC1BF64A587F76F2DBE3A1
+vis-network/vis-network.min.js         F53F833DDB9BF97EFE856BB0637D4FE88F39E39999C7E94A4B8AFC8DE8A1A2E5
+vis-network/vis-network.min.css        A074F8F4C748B7CCB375A2AE58D2DE1881B25A26D0E419A9E750E7D860AD18E2
 inter-latin-400-normal.woff2           8909904AB6C872EB994093482A88A28ECA2CD95912D7B6FECD72103B0DC07EDC
 inter-latin-600-normal.woff2           F9A06E79CD3A2A20951C0F0E28F66DD0E6D3FDA73911D640A2125C8FCB78F21A
 inter-latin-700-normal.woff2           6F56409FD3D64BB85F7D070BCE20749DB2D66B6D63CEC586CC22D1C761BE2491
