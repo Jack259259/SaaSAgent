@@ -89,5 +89,11 @@ API(对齐设计 §8.5.4):
      (标签级 best-effort)。精确标签需:摄取时写入 `file_path` + 维护 `file_path→acl_tags` sidecar
      (由 rag-svc ingest 的 per-doc 元数据构建);`LightRagGraphProvider._tags_for` 已留接入点。
   3. **degree/source/chunk_ref**:真实路径为 best-effort(可能 null),前端需容忍。
-- **前端图谱可视化**:`web/` 的「查看知识图谱」交互(节点图渲染、点选下钻、搜索)单独成段实现,
-  对接上述契约。
+- **前端图谱可视化(已实现)**:`web/js/knowledge-graph.js` + `web/styles/knowledge-graph.css` +
+  vis-network 自托管(`web/vendor/vis-network/`)。从知识库管理弹窗「查看知识图谱」打开独立全屏面板:
+  力导向图 + 搜索(以实体为 center 重载)+ 类型过滤(前端 show/hide)+ 单击详情/双击展开邻居(增量合并去重)+
+  高亮子图 + 最小化/全屏/关闭 + 导出 PNG;角色门控复用 `isKbInternal`(IT 库仅内部)。文本经 DOMPurify 消毒。
+  - **「查看原文」按钮当前禁用**:契约的 `chunk_ref`(LightRAG chunk id)**无对应"按 chunk_ref 读原文"的端点**。
+    待补:`GET /admin/kb/graph/source?kb=&chunk_ref=`(或复用文档下载/片段读取),返回该实体来源片段文本;
+    前端已留禁用按钮 + 标注,端点就绪后接上即可。
+  - **degree/source/chunk_ref 容忍 null**:真实 LightRAG 路径为 best-effort(见上文),前端展示已做空值兜底。
