@@ -32,7 +32,8 @@
   <script type="module">
     import { installMockSSE, parseSSE, pickScenario } from './mock-sse.js';
     import { renderMarkdown } from '../js/markdown.js';
-    import { appendToken, createChat } from '../js/chat.js';
+    import { appendToken, createChat, DEFAULT_SHOW_REASONING, loadShowReasoning, saveShowReasoning } from '../js/chat.js';
+    import { icon } from '../vendor/lucide/icons.js';
     import { newRun, applyPlan, applyStep, applyToolCall, applyToolResult, applyErrorToRun, completeRunSteps, runSummaryLine, snapshotRun, classifyResult, toolDisplayName } from '../js/run.js';
     import { postChatStream, parseFrame, buildChatBody, buildConfirmBody, buildAskBody, setUserCtx } from '../js/sse.js';
     import { validateFile, fileExt, humanSize, isImageExt, ATTACH_LIMITS } from '../js/attachments.js';
@@ -583,6 +584,63 @@
     const _kgKeys = Object.keys(createKnowledgeGraph());
     const _otherForKg = new Set([...Object.keys(createSkills()), ...Object.keys(createChat()), ...Object.keys(createRepos()), ...Object.keys(createKb())]);
     assert('merge: kg 方法不与 skills/chat/repos/kb 同名(防合并覆盖)', _kgKeys.every((k) => !_otherForKg.has(k)));
+
+    // ===== 「是否展示推理过程」总开关:持久化 / 渲染门控 / 数据完整性 / 最小指示 =====
+    // 默认常量 + 持久化往返(localStorage fp_show_reasoning,'1'/'0')
+    assert('reason: 默认常量=关', DEFAULT_SHOW_REASONING === false);
+    try { localStorage.removeItem('fp_show_reasoning'); } catch (e) {}
+    assert('reason: 未设置→取默认(关)', loadShowReasoning() === false);
+    saveShowReasoning(true);
+    assert('reason: 写开后读取=开 + 落 "1"', loadShowReasoning() === true && localStorage.getItem('fp_show_reasoning') === '1');
+    saveShowReasoning(false);
+    assert('reason: 写关后读取=关 + 落 "0"', loadShowReasoning() === false && localStorage.getItem('fp_show_reasoning') === '0');
+
+    // createChat 初始=默认;toggle 翻转并落库;initReasoning 从 localStorage 恢复
+    try { localStorage.removeItem('fp_show_reasoning'); } catch (e) {}
+    const _cRsn = createChat();
+    assert('reason: createChat 初始=默认', _cRsn.showReasoning === DEFAULT_SHOW_REASONING);
+    _cRsn.toggleReasoning();
+    assert('reason: toggle 翻转 + 落库', _cRsn.showReasoning === !DEFAULT_SHOW_REASONING && loadShowReasoning() === !DEFAULT_SHOW_REASONING);
+    _cRsn.toggleReasoning();
+    assert('reason: 再 toggle 复位', _cRsn.showReasoning === DEFAULT_SHOW_REASONING);
+    saveShowReasoning(true);
+    const _cRsn2 = createChat();
+    _cRsn2.initReasoning();
+    assert('reason: initReasoning 从 localStorage 恢复=开', _cRsn2.showReasoning === true);
+    try { localStorage.removeItem('fp_show_reasoning'); } catch (e) {}
+
+    // 数据完整性:关闭态事件仍累积 currentRun + 完成仍写 run 留痕(开关只控渲染,不丢数据)
+    const _cHide = mkChat();
+    _cHide.showReasoning = false;
+    _cHide._onEvent('plan', { version: 1, steps: [{ id: 's1', goal: 'g' }] });
+    _cHide._onEvent('tool_call', { id: 't1', tool: 'query_finance_data', arguments: {} });
+    _cHide._onEvent('tool_result_summary', { id: 't1', tool: 'query_finance_data', summary: '短', workspace_ref: 'w' });
+    assert('reason: 关闭态事件仍累积 currentRun(不丢数据)',
+      _cHide.currentRun.plan.steps.length === 1 && _cHide.currentRun.toolTimeline.length === 1 && _cHide.currentRun.toolTimeline[0].status === 'done');
+    _cHide._onEvent('answer_delta', { text: '答' });
+    _cHide._finishDone();
+    assert('reason: 关闭态完成仍写 run 留痕(开关只控渲染)', _cHide.messages[0].blocks.some((b) => b.type === 'run'));
+
+    // 关闭态最小指示逻辑:streaming 且无答案正文→显示;答案开始 / 非 streaming→隐藏
+    const _cBusy = mkChat();
+    _cBusy.sendStatus = 'streaming';
+    assert('reason: streaming 且无答案正文→reasoningBusy', _cBusy.reasoningBusy() === true && _cBusy.hasStreamingAnswerText() === false);
+    _cBusy._onEvent('answer_delta', { text: '部分答案' });
+    assert('reason: 答案正文开始→reasoningBusy=false', _cBusy.reasoningBusy() === false && _cBusy.hasStreamingAnswerText() === true);
+    _cBusy.sendStatus = 'idle';
+    assert('reason: 非 streaming→reasoningBusy=false', _cBusy.reasoningBusy() === false);
+
+    // 图标 + index.html 渲染门控 / 控件无障碍(DOM 断言)
+    assert('reason: icon(info) 返回 svg', /<svg/.test(icon('info')) && /circle/.test(icon('info')));
+    await assertAsync('reason: index.html 进展区/留痕受 showReasoning 门控 + 最小指示 + TopBar 开关无障碍', async () => {
+      const html = await (await fetch('../index.html')).text();
+      const liveGated = html.includes('currentRun && currentRun.plan && showReasoning');
+      const snapGated = html.includes("b.type === 'run' && showReasoning");
+      const minInd = html.includes('!showReasoning && reasoningBusy()');
+      const a11y = /role="switch"/.test(html) && /aria-label="是否展示推理过程"/.test(html)
+        && /title="是否展示推理过程"/.test(html) && /icon\('info'\)/.test(html);
+      return liveGated && snapGated && minInd && a11y;
+    });
 
     // ===== 渲染结果 =====
     const passed = results.filter((r) => r.ok).length;

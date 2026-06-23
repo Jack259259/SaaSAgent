@@ -41,6 +41,7 @@ document.addEventListener('alpine:init', () => {
 
     init() {
       applyHljsTheme(this.theme);
+      this.initReasoning(); // 恢复「是否展示推理过程」全局偏好(默认关)
       this.initChat(); // 恢复最近会话(刷新可回看)
     },
     toggleTheme() {

@@ -77,6 +77,20 @@
         <button class="icon-btn hamburger" type="button" @click="sidebarOpen = !sidebarOpen" aria-label="打开 / 关闭侧栏" x-html="icon('menu')"></button>
         <div class="topbar-title" x-text="conversationTitle"></div>
         <div class="topbar-actions">
+          <!-- 是否展示推理过程(Agent 运行过程总开关;开关 + ⓘ 均可键盘聚焦与切换) -->
+          <div class="reason-toggle" role="group" aria-label="推理过程显示开关">
+            <button class="switch" type="button" role="switch"
+                    :class="{ on: showReasoning }"
+                    :aria-checked="showReasoning ? 'true' : 'false'"
+                    aria-label="是否展示推理过程"
+                    :title="showReasoning ? '推理过程:开(点按隐藏)' : '推理过程:关(点按显示)'"
+                    @click="toggleReasoning()">
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+            </button>
+            <button class="icon-btn info-btn" type="button"
+                    aria-label="是否展示推理过程" title="是否展示推理过程"
+                    @click="toggleReasoning()" x-html="icon('info')"></button>
+          </div>
           <button class="icon-btn" type="button" @click="toggleTheme()" :aria-label="theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题'" :title="theme === 'dark' ? '切换到亮色' : '切换到暗色'" x-html="theme === 'dark' ? icon('sun') : icon('moon')"></button>
           <button class="icon-btn" type="button" aria-label="用户菜单" title="用户菜单(占位)" x-html="icon('user')"></button>
         </div>
@@ -84,8 +98,8 @@
 
       <main class="chat" :class="{ 'is-empty': !hasMessages }">
 
-        <!-- ===== 顶部任务进展区(W2,改动①) ===== -->
-        <template x-if="currentRun && currentRun.plan">
+        <!-- ===== 顶部任务进展区(W2,改动①;受「是否展示推理过程」总开关门控) ===== -->
+        <template x-if="currentRun && currentRun.plan && showReasoning">
           <section class="run-panel live" aria-label="任务进展">
             <div class="run-head">
               <button class="run-toggle" type="button" @click="toggleCollapse(currentRun)">
@@ -127,6 +141,14 @@
               </ul>
             </div>
           </section>
+        </template>
+
+        <!-- ===== 关闭态最小状态指示(推理过程隐藏 + 本轮进行中且尚无答案正文) ===== -->
+        <template x-if="!showReasoning && reasoningBusy()">
+          <div class="reason-min" aria-live="polite">
+            <span class="reason-min-dot" aria-hidden="true"></span>
+            <span>正在处理…</span>
+          </div>
         </template>
 
         <!-- ===== 空状态 ===== -->
@@ -252,7 +274,7 @@
                           <template x-if="b.type === 'note'">
                             <div class="msg-note" x-text="b.text"></div>
                           </template>
-                          <template x-if="b.type === 'run'">
+                          <template x-if="b.type === 'run' && showReasoning">
                             <section class="run-panel snapshot">
                               <div class="run-head">
                                 <button class="run-toggle" type="button" @click="toggleCollapse(b)">

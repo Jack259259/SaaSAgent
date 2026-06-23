@@ -27,6 +27,25 @@ function friendlyError(e) {
   return '网络错误,请重试。';
 }
 
+// 「是否展示推理过程」全局偏好。本架构后端 SSE 无模型思维链 token,"推理过程"=Agent 运行过程
+// (顶部任务进展区 + 工具调用时间线,见 frontend-design §7.5)。开关只控渲染、不碰事件数据。
+// 默认=关(只看结果);改此常量即调整默认值。
+export const DEFAULT_SHOW_REASONING = false;
+const REASONING_KEY = 'fp_show_reasoning';
+/** 读全局偏好:'1'→true、'0'→false、未设置→fallback(默认)。隐私/配额异常回退默认。 */
+export function loadShowReasoning(fallback = DEFAULT_SHOW_REASONING) {
+  try {
+    const v = localStorage.getItem(REASONING_KEY);
+    if (v === '1') return true;
+    if (v === '0') return false;
+    return fallback;
+  } catch (e) { return fallback; }
+}
+/** 写全局偏好('1'/'0');隐私/配额异常忽略。 */
+export function saveShowReasoning(val) {
+  try { localStorage.setItem(REASONING_KEY, val ? '1' : '0'); } catch (e) { /* 忽略 */ }
+}
+
 /** 创建聊天相关的 Alpine 状态与方法(由 app.js 合入根组件)。 */
 export function createChat() {
   return {
@@ -35,6 +54,7 @@ export function createChat() {
     hasMessages: false,
     sendStatus: 'idle',     // idle | streaming | error
     currentRun: null,
+    showReasoning: DEFAULT_SHOW_REASONING, // 是否展示推理过程(Agent 运行过程);全局偏好,见 initReasoning
     sessionId: '',
     pendingResume: null,
     lastUserText: '',
@@ -300,6 +320,19 @@ export function createChat() {
     },
     autogrow(e) { const t = e.target; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px'; },
     _resetComposerHeight() { document.querySelectorAll('.composer-input').forEach((t) => { t.style.height = 'auto'; }); },
+
+    // ---- 推理过程(Agent 运行过程)显隐总开关 ----
+    /** 从 localStorage 恢复全局偏好(app.js init 调用;刷新 / 新对话保持)。 */
+    initReasoning() { this.showReasoning = loadShowReasoning(); },
+    /** 切换并落库。实时生效:仅改渲染条件,不动 currentRun / 留痕数据(中途开关不丢数据)。 */
+    toggleReasoning() { this.showReasoning = !this.showReasoning; saveShowReasoning(this.showReasoning); },
+    /** 当前助手消息是否已有答案正文(决定关闭态最小指示是否仍需显示)。 */
+    hasStreamingAnswerText() {
+      const am = this._assistant();
+      return !!(am && (am.blocks || []).some((b) => b.type === 'text' && (b.raw || '').length > 0));
+    },
+    /** 关闭态最小指示条件:本轮进行中且尚无答案正文(答案一开始流式即收起)。 */
+    reasoningBusy() { return this.sendStatus === 'streaming' && !this.hasStreamingAnswerText(); },
 
     // ---- 进展区 / 时间线 ----
     toggleCollapse(o) { if (o) o.collapsed = !o.collapsed; },
