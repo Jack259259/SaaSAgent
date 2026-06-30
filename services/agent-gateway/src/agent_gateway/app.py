@@ -10,6 +10,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -37,6 +38,7 @@ from rag_svc import acl as rag_acl
 
 from . import kb, kb_graph, repos
 from .auth import get_trace_id, require_kb_admin, require_repo_admin, require_user_ctx
+from .config import load_llm_config
 from .deps import (
     get_memory_service,
     get_provider,
@@ -44,9 +46,22 @@ from .deps import (
     get_session_store,
     get_skill_index,
 )
+from .runtime_config import load_config_into_environ
 from .sse import encode_sse
 
-app = FastAPI(title="资金计划 Agent 网关", version="0.1.0")
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # 启动期把 config/app.yml + config/secrets.yml 写回环境(setdefault,OS env 优先;见
+    # runtime_config / docs/deploy.md)。须早于 load_llm_config —— 让 llm.yml 的 ${LLM_API_KEY}
+    # 能取到 secrets.yml 写入的密钥。
+    load_config_into_environ()
+    # 启动期校验 LLM 配置:非法 LLM_Interface_Format 在此 fail fast(而非首个请求才暴露;需求 5)。
+    load_llm_config()
+    yield
+
+
+app = FastAPI(title="资金计划 Agent 网关", version="0.1.0", lifespan=_lifespan)
 
 
 class ChatRequest(BaseModel):

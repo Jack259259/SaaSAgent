@@ -3,8 +3,14 @@
 # - 值支持 ${ENV_VAR} 插值(推荐密钥走环境/密管);留空或未解析则回退同名环境变量。
 # - 配置文件路径可用环境变量 FP_LLM_CONFIG 覆盖(默认 config/llm.yml)。
 
+# 接口格式:"Anthropic"(默认)或 "OpenAI"。决定按哪种协议与模型通信(两种格式共用
+# 下面的 url / api_key / model)。缺失或留空 = Anthropic(向后兼容,现有配置不受影响)。
+# 大小写不敏感;非法值在服务启动时即报错。OpenAI 走 /v1/chat/completions。
+# 提示:model 名需与所选格式匹配(如 OpenAI 用 gpt-4o-mini;Anthropic 用 claude-opus-4-8)。
+LLM_Interface_Format: "Anthropic"
+
 # API 链接(base URL)。留空 = Anthropic 官方端点;可填中转 / 网关 / 兼容端点。
-# 回退顺序:url → 环境 LLM_BASE_URL → 环境 ANTHROPIC_BASE_URL。
+# 回退顺序:url → 环境 LLM_BASE_URL → 环境 ANTHROPIC_BASE_URL(OpenAI 格式则回退 OPENAI_BASE_URL)。
 url: ""
 
 # API Key。调真实模型必填。建议用 ${LLM_API_KEY} 走环境/密管,也可直接填(注意勿提交)。

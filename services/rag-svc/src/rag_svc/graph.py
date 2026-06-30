@@ -29,6 +29,12 @@ if TYPE_CHECKING:
 _KB_DEFAULT_TAG = {acl.KB_BUSINESS: "public", acl.KB_IT_DESIGN: "internal"}
 
 
+# ── 图 working_dir 单一事实源(ingest 写入与 Provider 读取共用,保证两路径完全一致)────
+def graph_working_dir(root: Path, kb: str, tenant: str | None) -> Path:
+    """真实 LightRAG 图按 (kb, tenant) 物理分目录(红线 9);tenant 缺省=全局 ``_global``。"""
+    return root / kb / (tenant or "_global")
+
+
 # ── ACL 过滤(红线 5/9;在数据离开 rag-svc 前施加)──────────────────────────────────
 def filter_graph(
     user_ctx: UserCtx, nodes: list[GraphNode], edges: list[GraphEdge]
@@ -284,6 +290,10 @@ class LightRagGraphProvider:
         self._embedder = embedder
         self._provider = provider
         self._cache: dict[tuple[str, str], Any] = {}
+
+    def invalidate(self, kb: str, tenant_id: str | None = None) -> None:
+        """失效 (kb, tenant) 已初始化的 LightRAG 实例(ingest 重建图后调用);下次读重载。"""
+        self._cache.pop((kb, tenant_id or "_global"), None)
 
     async def _rag(self, kb: str, tenant_id: str | None) -> Any:  # pragma: no cover — 生产路径
         from .lightrag_store import LightRagStore

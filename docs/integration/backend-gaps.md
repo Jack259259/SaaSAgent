@@ -82,8 +82,15 @@ API(对齐设计 §8.5.4):
 - **引擎**:`FP_KB_GRAPH_ENGINE` 默认 `mock`(`MockGraphProvider`,虚构 fixture,CI/联调用);生产切
   `lightrag`(`LightRagGraphProvider`,真实图,**不进 CI** —— lightrag 未安装,镜像 `LightRagStore` 范式)。
 - **生产化 TODO(投产前接入真实图谱时)**:
-  1. **建图**:rag-svc 切真实 `LightRagStore`(`pip install lightrag-hku`)并对 business/it_design ingest
-     建图(当前默认 `LocalKnowledgeStore`、未建图 → 真实引擎下图为空)。
+  1. **建图(已打通)**:`ingest`(`FP_KB_GRAPH_ENGINE=lightrag` 时)在检索索引 `.index` 之外**额外**全量
+     (重)建知识图谱 —— `rag_svc.ingest._rebuild_graph` 先 `shutil.rmtree` 清旧,再用 `LightRagStore.insert`
+     把当前全部文档重抽取进 LightRAG 图(embedding/llm 经 packages/llm 网关,不直连 SDK)。写入目录经
+     `graph_working_dir(graph_root(), kb, tenant)` 与 `LightRagGraphProvider` 读取目录**同一事实源**(接缝
+     有单测锁定);建图后 `kb._run_ingest` 调 `deps.invalidate_kb_graph(kb)` 失效图 Provider 单例缓存,知识
+     图谱面板若正展示同一库则入库完成**自动刷新**(`web/js/kb.js` 联动)。**开启方式**:`FP_KB_GRAPH_ENGINE=lightrag`
+     + `FP_KB_GRAPH` 默认开(端点)+ `pip install lightrag-hku` + 配置真实 LLM(dev_stub 桩无法抽取 → 跳过建图)。
+     **全量重抽取**(每次「重新入库」重跑全部文档 LLM 实体/关系抽取;增量仅变更文档为后续优化)。默认/CI `mock`
+     引擎不建图、行为不变,真实建图路径 `# pragma: no cover` 不进 CI。
   2. **图 ACL 标签级**:LightRAG 图节点/边原生**无 tenant_id/acl_tags**(provenance 仅 source_id/file_path)。
      当前 `LightRagGraphProvider` 用 **(kb, tenant) 分目录物理隔离**(租户级,红线 9)+ **库默认标签**回退
      (标签级 best-effort)。精确标签需:摄取时写入 `file_path` + 维护 `file_path→acl_tags` sidecar

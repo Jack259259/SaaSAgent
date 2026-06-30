@@ -34,27 +34,30 @@ sync:
 	$(UV) sync --all-packages
 
 # 启动 agent-gateway(阶段 2)。本地依赖(postgres/langfuse,docker compose)后续阶段再接入。
+# 注意:统一用 `python -m <模块>` 调用而非 console-script(uvicorn/pytest/ruff/mypy.exe)。
+#       Windows 下 uv 生成的 .exe trampoline 无法 canonicalize 含非 ASCII(中文)字符的仓库路径,
+#       会报 "uv trampoline failed to canonicalize script path";`python -m` 绕过 trampoline。
 dev: sync
-	$(UV) run uvicorn agent_gateway.app:app --host 127.0.0.1 --port 8080
+	$(UV) run python -m uvicorn agent_gateway.app:app --host 127.0.0.1 --port 8080
 
 # 全部单测;限定单个服务:make test SVC=data-svc(未知服务以退出码 1 失败)。
 test: sync
 ifdef SVC
 	@test -d "services/$(SVC)" || { echo "unknown service: services/$(SVC)"; exit 1; }
-	$(UV) run pytest services/$(SVC)
+	$(UV) run python -m pytest services/$(SVC)
 else
-	$(UV) run pytest
+	$(UV) run python -m pytest
 endif
 
 lint: sync
-	$(UV) run ruff format --check .
-	$(UV) run ruff check .
-	$(UV) run mypy $(MYPY_PATHS)
+	$(UV) run python -m ruff format --check .
+	$(UV) run python -m ruff check .
+	$(UV) run python -m mypy $(MYPY_PATHS)
 
 # contracts 契约测试(阶段 1 真实现):21 份工具规格合法 + 信封 user_ctx 负例 +
 # AgentState/audit/SOP 正反例 + 模型↔schema 一致性 + docs 不漂移。
 contract-test: sync
-	$(UV) run pytest packages/contracts
+	$(UV) run python -m pytest packages/contracts
 
 # E 必须是 EVAL_SETS 之一;缺失/非法以退出码 1 给出 usage(尚未实现的真实 runner 以退出码 2)。
 # sop-replay(阶段 8 真实现):回放 assets/sops 全量,失败标 <id>.stale。

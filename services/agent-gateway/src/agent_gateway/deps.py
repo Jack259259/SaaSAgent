@@ -7,7 +7,14 @@ from pathlib import Path
 
 from code_svc import CodeService
 from data_svc import DataService, PostgresExecutor, SemanticLayer, SqlValidator, WrenAdapter
-from llm import AnthropicProvider, HashingEmbedder, MockProvider, Provider, ScriptedTurn
+from llm import (
+    AnthropicProvider,
+    HashingEmbedder,
+    MockProvider,
+    OpenAIProvider,
+    Provider,
+    ScriptedTurn,
+)
 from memory_svc import MemoryService
 from orchestrator import SessionStore, ToolRegistry, base_tool_handlers
 from orchestrator.skills import SkillIndex
@@ -31,6 +38,7 @@ from rag_svc import (
     LightRagGraphProvider,
     MockGraphProvider,
     RagService,
+    graph_working_dir,
 )
 from scheduler_svc import (
     EscalationService,
@@ -42,6 +50,7 @@ from scheduler_svc import (
 from sop_executor import SopService
 
 from .config import load_llm_config
+from .kb import graph_root  # 图根单一事实源(与 ingest 写入同源);kb 模块级不反向依赖 deps,无环
 
 # 进程内会话存储单例(阶段 3 内存版;支撑跨请求暂停/恢复)。
 _SESSION_STORE = SessionStore()
@@ -55,8 +64,7 @@ _NOTIFY = NotifyService(channel=WebhookChannel())
 _ESCALATION = EscalationService()
 # 知识库索引根目录(由人工上传 + ingest 构建;空则检索返回"未找到依据")。
 _KNOWLEDGE_INDEX_DIR = Path("data/knowledge/.index")
-# 知识图谱(LightRAG 生产引擎)按 (kb, tenant) 分目录的根;CI/默认走 Mock,不读此目录。
-_KNOWLEDGE_GRAPH_DIR = Path("data/knowledge/.graph")
+# 知识图谱(LightRAG 生产引擎)按 (kb, tenant) 分目录;根经 kb.graph_root() 与 ingest 写入同源。
 _KB_GRAPH_PROVIDER: KnowledgeGraphProvider | None = None
 # 代码索引:仓根(人工 clone 到此)+ 符号库(code-index 构建)。
 _CODE_REPOS_DIR = Path("data/repos")
@@ -67,7 +75,8 @@ def get_provider() -> Provider:
     """按 config/llm.yml(路径可经 FP_LLM_CONFIG 覆盖)构造 Provider;缺字段回退同名环境变量。
 
     dev_stub=true(或 FP_DEV_STUB=1)→ 离线开发桩 MockProvider(无需 api_key);
-    否则 → AnthropicProvider(model / api_key / base_url 来自配置)。
+    否则按 LLM_Interface_Format 选适配器:openai → OpenAIProvider,默认 → AnthropicProvider。
+    两种格式共用 model / api_key / base_url(来自配置)。
     """
     cfg = load_llm_config()
     if cfg.dev_stub:
@@ -82,6 +91,8 @@ def get_provider() -> Provider:
                 )
             ]
         )
+    if cfg.interface_format == "openai":
+        return OpenAIProvider(model=cfg.model, api_key=cfg.api_key, base_url=cfg.base_url)
     return AnthropicProvider(model=cfg.model, api_key=cfg.api_key, base_url=cfg.base_url)
 
 
@@ -154,9 +165,8 @@ def _build_graph_provider() -> KnowledgeGraphProvider:
     """
     if os.environ.get("FP_KB_GRAPH_ENGINE", "mock") == "lightrag":
         return LightRagGraphProvider(
-            working_dir_resolver=lambda kb, tenant: (
-                _KNOWLEDGE_GRAPH_DIR / kb / (tenant or "_global")
-            ),
+            # root 与 ingest 同源(kb.graph_root → graph_working_dir)→ 写入/读取路径同一事实源。
+            working_dir_resolver=lambda kb, tenant: graph_working_dir(graph_root(), kb, tenant),
             embedder=HashingEmbedder(),
             provider=get_provider(),
         )
@@ -169,3 +179,12 @@ def get_kb_graph_service() -> RagService:
     if _KB_GRAPH_PROVIDER is None:
         _KB_GRAPH_PROVIDER = _build_graph_provider()
     return RagService(stores={}, graph_provider=_KB_GRAPH_PROVIDER)
+
+
+def invalidate_kb_graph(kb: str, tenant: str | None = None) -> None:
+    """ingest(lightrag 引擎)重建图后失效已缓存的图 Provider 实例,使下次查询从新 working_dir 重载。
+
+    mock 引擎 / Provider 尚未构建 → no-op(下次查询复用同一单例 Provider 的缓存)。
+    """
+    if isinstance(_KB_GRAPH_PROVIDER, LightRagGraphProvider):
+        _KB_GRAPH_PROVIDER.invalidate(kb, tenant)

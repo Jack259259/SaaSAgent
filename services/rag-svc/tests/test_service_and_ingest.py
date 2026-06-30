@@ -104,3 +104,17 @@ async def test_incremental_hash_skip(tmp_path: Path) -> None:
     second = await ingest_dir(kb=acl.KB_BUSINESS, src=_FIXTURES, store_dir=store_dir)
     assert second["docs"] == 0
     assert second["skipped"] == 3  # 未变更全跳过
+
+
+async def test_graph_params_default_is_noop(tmp_path: Path) -> None:
+    # 加法式回归锁:graph_dir/graph_provider 缺省 == 显式 None,均不建图、stats 不变(默认/CI 路径)。
+    default = await ingest_dir(kb=acl.KB_BUSINESS, src=_FIXTURES, store_dir=tmp_path / "s1")
+    explicit = await ingest_dir(
+        kb=acl.KB_BUSINESS,
+        src=_FIXTURES,
+        store_dir=tmp_path / "s2",
+        graph_dir=None,
+        graph_provider=None,
+    )
+    assert default == explicit
+    assert not (tmp_path / "s2" / ".graph").exists()  # 未传 graph_dir → 不碰图

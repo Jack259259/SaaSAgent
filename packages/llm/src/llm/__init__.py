@@ -8,6 +8,7 @@ from __future__ import annotations
 from .anthropic_provider import AnthropicProvider
 from .embedding import Embedder, HashingEmbedder
 from .mock_provider import MockProvider, ScriptedTurn
+from .openai_provider import OpenAIProvider
 from .provider import NotConfiguredError, Provider
 from .retry import RetryConfig, with_retry
 from .tracing import (
@@ -46,6 +47,7 @@ __all__ = [
     "Message",
     "MockProvider",
     "NotConfiguredError",
+    "OpenAIProvider",
     "Provider",
     "RetryConfig",
     "Role",

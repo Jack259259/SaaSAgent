@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 
 from contracts import UserCtx
-from rag_svc import MockGraphProvider, RagService, acl
+from llm import HashingEmbedder, MockProvider
+from rag_svc import (
+    LightRagGraphProvider,
+    MockGraphProvider,
+    RagService,
+    acl,
+    graph_working_dir,
+)
 
 
 def _svc() -> RagService:
@@ -125,3 +133,39 @@ async def test_no_provider_returns_empty() -> None:
     svc = RagService(stores={})
     data = await svc.get_graph(_internal(), acl.KB_BUSINESS)
     assert data.nodes == [] and data.stats.total_nodes == 0
+
+
+# ── 图 working_dir 单一事实源 + 缓存失效(ingest↔Provider 接缝;不触 LightRAG)──────── #
+def test_graph_working_dir_layout(tmp_path: Path) -> None:
+    # tenant 缺省 → _global;给定 tenant → 该 tenant 段(红线 9 物理隔离)。
+    assert (
+        graph_working_dir(tmp_path, acl.KB_BUSINESS, None) == tmp_path / acl.KB_BUSINESS / "_global"
+    )
+    assert (
+        graph_working_dir(tmp_path, acl.KB_IT_DESIGN, "t_acme")
+        == tmp_path / acl.KB_IT_DESIGN / "t_acme"
+    )
+
+
+def _lightrag_provider() -> LightRagGraphProvider:
+    # 仅测缓存字典操作;resolver/embedder/provider 不被 invalidate 触达(不构造真实 LightRAG)。
+    return LightRagGraphProvider(
+        working_dir_resolver=lambda kb, tenant: Path("unused"),
+        embedder=HashingEmbedder(),
+        provider=MockProvider([]),
+    )
+
+
+def test_invalidate_drops_cached_instance() -> None:
+    prov = _lightrag_provider()
+    prov._cache[(acl.KB_BUSINESS, "_global")] = object()  # 占位实例(ingest 重建后应失效)
+    prov.invalidate(acl.KB_BUSINESS)  # tenant 缺省 → _global
+    assert (acl.KB_BUSINESS, "_global") not in prov._cache
+
+
+def test_invalidate_explicit_tenant_and_missing_noop() -> None:
+    prov = _lightrag_provider()
+    prov._cache[(acl.KB_BUSINESS, "t_acme")] = object()
+    prov.invalidate(acl.KB_BUSINESS, "t_acme")
+    assert (acl.KB_BUSINESS, "t_acme") not in prov._cache
+    prov.invalidate(acl.KB_IT_DESIGN)  # 不存在的键 → 不抛

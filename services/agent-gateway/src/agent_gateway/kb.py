@@ -24,6 +24,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from llm import MockProvider
 from rag_svc import acl
 from rag_svc.chunking import parse_document
 from rag_svc.ingest import ingest_dir
@@ -91,6 +92,11 @@ def knowledge_dir() -> Path:
 
 def index_dir() -> Path:
     return knowledge_dir() / ".index"
+
+
+def graph_root() -> Path:
+    """知识图谱(LightRAG)根目录;与 deps 图 Provider 读取**同源**(均经此 + graph_working_dir)。"""
+    return knowledge_dir() / ".graph"
 
 
 def validate_kb(kb: str) -> str:
@@ -232,14 +238,30 @@ _jobs_lock = threading.Lock()
 
 
 def _run_ingest(job: _IngestJob) -> None:
+    from . import deps  # 延迟导入避免 kb↔deps 环;运行时按引擎决定是否建图
+
+    # lightrag 引擎:在 .index 之外额外(重)建知识图谱(管理面 tenant=None → _global)。
+    # 默认/CI(mock)graph_kwargs 为空 → 行为不变。dev_stub 桩无法做实体抽取 → 跳过。
+    graph_kwargs: dict[str, Any] = {}
+    build_graph = os.environ.get("FP_KB_GRAPH_ENGINE", "mock") == "lightrag"
+    if build_graph:
+        provider = deps.get_provider()
+        if isinstance(provider, MockProvider):
+            build_graph = False  # dev_stub:无真实 LLM,跳过建图(避免产出垃圾实体)
+        else:
+            graph_kwargs = {"graph_dir": graph_root(), "graph_provider": provider}
     try:
-        stats = asyncio.run(ingest_dir(kb=job.kb, src=kb_src_dir(job.kb), store_dir=index_dir()))
+        stats = asyncio.run(
+            ingest_dir(kb=job.kb, src=kb_src_dir(job.kb), store_dir=index_dir(), **graph_kwargs)
+        )
     except Exception as exc:
         with _jobs_lock:
             job.error = str(exc)[:200]
             job.status = "failed"
             job.finished_at = _fmt_time(time.time())
         return
+    if build_graph:
+        deps.invalidate_kb_graph(job.kb)  # 失效图 Provider 缓存 → 下次查询读新图(前端自动刷新)
     with _jobs_lock:
         job.stats = dict(stats)
         job.status = "done"

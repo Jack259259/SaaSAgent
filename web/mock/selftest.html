@@ -40,7 +40,7 @@
     import { createConversationStore, groupByTime } from '../js/store.js';
     import { canManageSkills, validateSkillName, validateSkillZip, splitFrontmatter, SKILL_ZIP_LIMITS, listSkills, createSkill, setSkillStatus, uploadSkillZip, createSkills } from '../js/skills.js';
     import { canManageRepos, validateRepoName, validateRepoUrl, validateRepoArchive, createRepos } from '../js/repos.js';
-    import { canManageKb, isKbInternal, validateKbName, validateKbFile, ingestLabel, isIngestPolling, listKbDocs, uploadKbDoc, ingestKb, ingestStatus, createKb, KB_UPLOAD_LIMIT } from '../js/kb.js';
+    import { canManageKb, isKbInternal, validateKbName, validateKbFile, ingestLabel, isIngestPolling, shouldReloadGraph, listKbDocs, uploadKbDoc, ingestKb, ingestStatus, createKb, KB_UPLOAD_LIMIT } from '../js/kb.js';
     import { _resetKb } from './mock-kb.js';
     import { canAccessIT, typeColorIndex, distinctTypes, edgeKey, sanitizeText, toVisNode, toVisEdge, toVisData, mergeGraph, debounce, getGraph, searchGraph, getGraphNode, createKnowledgeGraph } from '../js/knowledge-graph.js';
 
@@ -584,6 +584,45 @@
     const _kgKeys = Object.keys(createKnowledgeGraph());
     const _otherForKg = new Set([...Object.keys(createSkills()), ...Object.keys(createChat()), ...Object.keys(createRepos()), ...Object.keys(createKb())]);
     assert('merge: kg 方法不与 skills/chat/repos/kb 同名(防合并覆盖)', _kgKeys.every((k) => !_otherForKg.has(k)));
+
+    // ===== 知识库 → 知识图谱 联动:入库 done 且面板开同库 → 自动重载 =====
+    // 纯函数真值表(锁定联动条件)。
+    assert('link: shouldReloadGraph done+面板开+同库→true', shouldReloadGraph('done', true, 'business', 'business') === true);
+    assert('link: shouldReloadGraph failed→false', shouldReloadGraph('failed', true, 'business', 'business') === false);
+    assert('link: shouldReloadGraph 面板关→false', shouldReloadGraph('done', false, 'business', 'business') === false);
+    assert('link: shouldReloadGraph 异库→false', shouldReloadGraph('done', true, 'it_design', 'business') === false);
+
+    // 集成(mock 层断言联动被调用):createKb + createKnowledgeGraph spread 共享 this(同 app.js),
+    // loadKgGraph 设 spy;_pollKbIngest 走 mock-kb(一拍后 done)→ refreshKg→loadKgGraph。
+    _resetKb();
+    setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['internal_dev'], data_scope: {}, permissions: [] });
+    const _mkLinkRoot = () => {
+      const r = { ...createKb(), ...createKnowledgeGraph(), $nextTick: (fn) => fn && fn() };
+      r.kbOpen = true; r.kbTab = 'business'; // KB 管理面板开(否则 _pollKbIngest 提前 return)
+      let reloads = 0;
+      r.loadKgGraph = () => { reloads++; }; // refreshKg → loadKgGraph(此处计数)
+      r._reloads = () => reloads;
+      return r;
+    };
+    await assertAsync('link: 入库 done 且图谱面板开同库 → 图谱重载被调用', async () => {
+      const r = _mkLinkRoot(); r.kgOpen = true; r.kgKb = 'business';
+      await ingestKb('business');        // mock:running
+      await r._pollKbIngest('business'); // mock 一拍后 done → 触发联动
+      return r._reloads() >= 1;
+    });
+    await assertAsync('link: 图谱面板关 → 不重载(下次打开即最新)', async () => {
+      const r = _mkLinkRoot(); r.kgOpen = false; r.kgKb = 'business';
+      await ingestKb('business');
+      await r._pollKbIngest('business');
+      return r._reloads() === 0;
+    });
+    await assertAsync('link: 图谱面板开但异库 → 不重载', async () => {
+      const r = _mkLinkRoot(); r.kgOpen = true; r.kgKb = 'it_design';
+      await ingestKb('business');
+      await r._pollKbIngest('business');
+      return r._reloads() === 0;
+    });
+    setUserCtx(null);
 
     // ===== 「是否展示推理过程」总开关:持久化 / 渲染门控 / 数据完整性 / 最小指示 =====
     // 默认常量 + 持久化往返(localStorage fp_show_reasoning,'1'/'0')

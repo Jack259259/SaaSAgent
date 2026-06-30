@@ -46,6 +46,10 @@ export function ingestLabel(status) {
 export function isIngestPolling(status) {
   return status === 'running';
 }
+// 入库完成 → 是否重载知识图谱面板(纯函数,供 selftest):仅 done 且面板开且展示同一库。
+export function shouldReloadGraph(ingestStatus, kgOpen, kgKb, kb) {
+  return ingestStatus === 'done' && !!kgOpen && kgKb === kb;
+}
 
 // ---- 统一 http(带 user_ctx 透传;错误带 status+code)----
 async function http(method, url, { json, formData } = {}) {
@@ -184,8 +188,14 @@ export function createKb() {
       if (kb !== this.kbTab || !this.kbOpen) { this._stopKbPoll(); return; } // 已切走/已关闭则停
       try {
         this.kbIngest = await ingestStatus(kb);
-        if (isIngestPolling(this.kbIngest.status)) { this._scheduleKbPoll(kb); }
-        else { this._stopKbPoll(); await this.refreshKbDocs(kb); } // done/failed:刷新列表(indexed 翻新)
+        if (isIngestPolling(this.kbIngest.status)) { this._scheduleKbPoll(kb); return; }
+        this._stopKbPoll();
+        const doneStatus = this.kbIngest.status; // 本次轮询判定(done/failed),refreshKbDocs 前捕获
+        await this.refreshKbDocs(kb); // done/failed:刷新列表(indexed 翻新)
+        // 入库完成且知识图谱面板正展示同一库 → 自动重载(app.js spread 共享 this;面板未开/异库不动)。
+        if (shouldReloadGraph(doneStatus, this.kgOpen, this.kgKb, kb) && typeof this.refreshKg === 'function') {
+          this.refreshKg(); // refreshKg→loadKgGraph;图谱文本经现有 sanitizeText/DOMPurify(红线 7/14)
+        }
       } catch (e) { this._stopKbPoll(); }
     },
 
