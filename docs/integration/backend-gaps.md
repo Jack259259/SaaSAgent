@@ -80,15 +80,35 @@ API(对齐设计 §8.5.4):
   开关 `FP_KB_GRAPH`(默认开,`=0`→404);节点/边按租户∧标签在 rag-svc 内过滤(红线 5/9)。
   契约见 `docs/integration/knowledge-graph-api.md`;实现 `agent_gateway/kb_graph.py` + `rag_svc/graph.py`。
 - **引擎**:`FP_KB_GRAPH_ENGINE` 默认 `mock`(`MockGraphProvider`,虚构 fixture,CI/联调用);生产切
-  `lightrag`(`LightRagGraphProvider`,真实图,**不进 CI** —— lightrag 未安装,镜像 `LightRagStore` 范式)。
+  `lightrag`(`LightRagGraphProvider`,真实图,**已对 lightrag-hku 1.5.4 端到端实测打通**;可选依赖默认
+  不装 → 库本身不进 CI,惰性导入 + Mock 引擎保 CI 行为不变)。
 - **生产化 TODO(投产前接入真实图谱时)**:
-  1. **建图**:rag-svc 切真实 `LightRagStore`(`pip install lightrag-hku`)并对 business/it_design ingest
-     建图(当前默认 `LocalKnowledgeStore`、未建图 → 真实引擎下图为空)。
+  1. **建图 + 读图(端到端已打通,Stage 2)**:`ingest`(`FP_KB_GRAPH_ENGINE=lightrag` 时)在检索索引 `.index` 之外**额外**全量
+     (重)建知识图谱 —— `rag_svc.ingest._rebuild_graph` 把当前全部文档**重抽取进临时目录**,成功后
+     **原子替换**(rename-aside)既有图(embedding/llm 经 packages/llm 网关,不直连 SDK)。**永不丢图**:
+     既有目录被占用 / 抽取失败 → 旧图原样保留 + job 置 `failed`(不再 `ignore_errors` 静默吞错产出空图)。
+     Windows 下读侧 LightRAG 实例会占用既有图目录,故 `kb._run_ingest` 在重建**之前**先 `deps.aclose_kb_graph(kb)`
+     finalize 并释放读侧句柄。写入目录经 `graph_working_dir(graph_root(), kb, tenant)` 与 `LightRagGraphProvider`
+     读取目录**同一事实源**(接缝有单测锁定);建图后再调 `deps.invalidate_kb_graph(kb)` 失效图 Provider 单例
+     缓存,知识图谱面板若正展示同一库则入库完成**自动刷新**(`web/js/kb.js` 联动)。**开启方式**:`FP_KB_GRAPH_ENGINE=lightrag`
+     + `FP_KB_GRAPH` 默认开(端点)+ 安装可选依赖 `lightrag`(`uv sync --all-packages --extra lightrag`;pin
+     `lightrag-hku==1.5.4`,默认/CI 不装)+ 配置真实 LLM(dev_stub 桩无法抽取 → 跳过建图)。
+     **全量重抽取**(每次「重新入库」重跑全部文档 LLM 实体/关系抽取;增量仅变更文档为后续优化)。默认/CI `mock`
+     引擎不建图、行为不变,真实建图路径 `# pragma: no cover` 不进 CI。
+     - **读图(Stage 2)**:`/admin/kb/graph*` 经 `RagService`→`LightRagGraphProvider`;读目录用
+       `graph_read_dir`(租户私有图缺失→回退全局 `_global`,即管理面所建),`invalidate` 重建后清该 kb
+       **全部**缓存键(多租户可能同指 `_global`)。**实测**:`POST /admin/kb/business/ingest`→`done`→
+       `GET /admin/kb/graph` 返回 49 真实节点,前端 vis 面板渲染 + 零 console 报错(Playwright 无头)。
+       **已知限制**:DeepSeek 对 LightRAG 英文抽取 prompt 的关系字段偶有格式不符 → 某些真实文档抽出实体
+       多、关系为 0(清洁文本正常,见 Stage 1 fixture 11 节点/10 边);实体语言默认英文(§I item4)。
   2. **图 ACL 标签级**:LightRAG 图节点/边原生**无 tenant_id/acl_tags**(provenance 仅 source_id/file_path)。
      当前 `LightRagGraphProvider` 用 **(kb, tenant) 分目录物理隔离**(租户级,红线 9)+ **库默认标签**回退
      (标签级 best-effort)。精确标签需:摄取时写入 `file_path` + 维护 `file_path→acl_tags` sidecar
      (由 rag-svc ingest 的 per-doc 元数据构建);`LightRagGraphProvider._tags_for` 已留接入点。
   3. **degree/source/chunk_ref**:真实路径为 best-effort(可能 null),前端需容忍。
+  4. **实体语言(中文检索 gap)**:LightRAG 默认英文抽取,中文文档抽出的实体/类型为英文(如「资金计划」→
+     `Capital Plan`/`concept`),致 `search_nodes` 中文查询匹配为空。如需中文实体:`LightRagStore._ensure`
+     构造 `LightRAG` 时加 `addon_params={"language": "Simplified Chinese"}` 并重建图。**当前取向:英文 canonical**。
 - **前端图谱可视化(已实现)**:`web/js/knowledge-graph.js` + `web/styles/knowledge-graph.css` +
   vis-network 自托管(`web/vendor/vis-network/`)。从知识库管理弹窗「查看知识图谱」打开独立全屏面板:
   力导向图 + 搜索(以实体为 center 重载)+ 类型过滤(前端 show/hide)+ 单击详情/双击展开邻居(增量合并去重)+

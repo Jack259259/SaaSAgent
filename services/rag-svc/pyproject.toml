@@ -9,6 +9,11 @@ dependencies = [
     "pydantic>=2.7",
 ]
 
+# 可选生产后端:真实 LightRAG 知识图谱(默认/CI 不安装;开启方式见 docs/deploy.md)。
+# 惰性导入(rag_svc.lightrag_store._ensure / graph.LightRagGraphProvider);mypy 已 ignore_missing_imports。
+[project.optional-dependencies]
+lightrag = ["lightrag-hku==1.5.4"]
+
 [project.scripts]
 ingest = "rag_svc.ingest:main"
 

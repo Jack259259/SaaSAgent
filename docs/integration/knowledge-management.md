@@ -46,6 +46,10 @@
 - 索引 `data/knowledge/.index/{kb}/index.json`(`indexed` 判定读其 `file_hashes` 键)。
 - 环境变量 `FP_KNOWLEDGE_DIR` 覆盖知识根目录(测试/部署用)。
 - 重新 ingest 后,下一次 `/chat` 经 `RagService.from_dir`(每请求重载)自动生效,无缓存需失效。
+- **知识图谱缓存不同于检索**:图查询(`/admin/kb/graph*`)的 LightRAG Provider 为**单例缓存**(按 (kb,tenant)
+  持初始化实例),非每请求重载;故 `ingest`(`FP_KB_GRAPH_ENGINE=lightrag`)重建图后由 `deps.invalidate_kb_graph(kb)`
+  失效**该 kb 全部租户缓存键**(`graph_read_dir` 下多租户可能同指 `_global`),知识图谱面板若正展示同一库则
+  入库完成自动刷新(Stage 2 已端到端实测;详见 `docs/integration/backend-gaps.md` §I)。
 
 ## 范围与边界
 

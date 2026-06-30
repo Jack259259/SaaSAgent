@@ -14,6 +14,7 @@ docs/integration/knowledge-upload.md),故 ACL 分层(强→弱):
 
 from __future__ import annotations
 
+import contextlib
 from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
@@ -27,6 +28,25 @@ if TYPE_CHECKING:
     from llm import Embedder, Provider
 
 _KB_DEFAULT_TAG = {acl.KB_BUSINESS: "public", acl.KB_IT_DESIGN: "internal"}
+
+
+# ── 图 working_dir 单一事实源(ingest 写入与 Provider 读取共用,保证两路径完全一致)────
+def graph_working_dir(root: Path, kb: str, tenant: str | None) -> Path:
+    """真实 LightRAG 图按 (kb, tenant) 物理分目录(红线 9);tenant 缺省=全局 ``_global``。"""
+    return root / kb / (tenant or "_global")
+
+
+def graph_read_dir(root: Path, kb: str, tenant: str | None) -> Path:
+    """读图目录:有 (kb,tenant) 私有 ``*.graphml`` 则用之,否则回退全局 ``_global``。
+
+    管理面只建全局图(tenant=None→_global);仅在确有私有 graphml 时才指向租户目录,避免对未建图
+    租户初始化 LightRAG(否则会建空目录)。回退全局后经 ``filter_graph`` 仍按 ACL 二次过滤(红线 5/9)。
+    """
+    if tenant is not None:
+        wd = graph_working_dir(root, kb, tenant)
+        if any(wd.glob("*.graphml")):
+            return wd
+    return graph_working_dir(root, kb, None)
 
 
 # ── ACL 过滤(红线 5/9;在数据离开 rag-svc 前施加)──────────────────────────────────
@@ -285,6 +305,30 @@ class LightRagGraphProvider:
         self._provider = provider
         self._cache: dict[tuple[str, str], Any] = {}
 
+    def invalidate(self, kb: str, tenant_id: str | None = None) -> None:
+        """失效该 kb 全部已初始化 LightRAG 实例(ingest 重建图后调用);下次读重载。
+
+        清 ``(kb, *)`` 全部租户键:经 ``graph_read_dir`` 多租户可能同指 ``_global``,重建后须一并
+        失效(否则缓存旧 _global 句柄的租户读到陈旧图)。``tenant_id`` 入参保留以兼容调用方。
+        """
+        for key in [k for k in self._cache if k[0] == kb]:
+            self._cache.pop(key, None)
+
+    async def aclose(self, kb: str, tenant_id: str | None = None) -> None:
+        """释放该 kb 全部已初始化实例的存储句柄后再失效缓存(重建图前调用,解 Windows 目录占用)。
+
+        对每个缓存实例先 ``await finalize()`` 关闭 LightRAG 存储、再移除;finalize 失败仅吞掉
+        (best-effort 释放,缓存照常移除,以免单个实例关闭异常阻断重建)。``invalidate`` 为不关闭
+        句柄的同步版本(仅丢缓存,供 mock / 单测)。
+        """
+        for key in [k for k in self._cache if k[0] == kb]:
+            store = self._cache.pop(key, None)
+            finalize = getattr(store, "finalize", None)
+            if finalize is not None:
+                # best-effort:缓存已移除,单个实例关闭异常不应阻断重建。
+                with contextlib.suppress(Exception):
+                    await finalize()
+
     async def _rag(self, kb: str, tenant_id: str | None) -> Any:  # pragma: no cover — 生产路径
         from .lightrag_store import LightRagStore
 
@@ -309,7 +353,7 @@ class LightRagGraphProvider:
         return GraphNode(
             entity_id=str(raw.id),
             name=str(props.get("entity_id") or raw.id),
-            entity_type=(labels[0] if labels else props.get("entity_type")),
+            entity_type=(props.get("entity_type") or (labels[0] if labels else None)),
             description=props.get("description"),
             source=file_path,
             degree=degree,
@@ -324,7 +368,7 @@ class LightRagGraphProvider:
             edge_id=str(getattr(raw, "id", f"{raw.source}->{raw.target}")),
             source_id=str(raw.source),
             target_id=str(raw.target),
-            relation_type=getattr(raw, "type", None) or props.get("keywords"),
+            relation_type=props.get("keywords") or getattr(raw, "type", None),
             description=props.get("description"),
             source_doc=props.get("file_path"),
             tenant_id=tenant_id,

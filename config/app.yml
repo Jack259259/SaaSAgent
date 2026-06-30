@@ -1,0 +1,45 @@
+# 资金计划 Agent —— 应用配置(非密钥)。本文件入库,作为各环境变量的集中入口与文档。
+#
+# - 顶层 KEY 即环境变量名(扁平;分节仅靠注释,勿用嵌套)。
+# - 启动期由 agent-gateway 写回进程环境(runtime_config.load_config_into_environ,setdefault)。
+# - 优先级:OS 环境变量 / .env  >  config/secrets.yml  >  本文件  >  代码默认。
+#   即:这里设的值会被同名 OS 环境变量覆盖;留空(空串)= 不设 = 走代码默认。
+# - 路径可经 FP_APP_CONFIG 覆盖本文件位置。
+# - 密钥不放这里:LLM_API_KEY / DB_DSN_READONLY / NOTIFY_WEBHOOK_URL / LANGFUSE_* 见
+#   config/secrets.yml(复制 .example)。LLM 接口格式 / url / model / 开发桩 dev_stub 见
+#   config/llm.yml —— 均不在本文件,避免双源。
+
+# ── 知识图谱(LightRAG)─────────────────────────────────────────────────────────
+# 引擎:mock(默认,CI/无 LightRAG 实例,MockGraphProvider 虚构 fixture)| lightrag(真实图)。
+# 注:开启真实图谱还需:FP_KB_GRAPH≠0 + 装可选依赖 lightrag(uv sync --all-packages --extra lightrag)+ 配置真实 LLM(非开发桩)。
+# FP_KB_GRAPH_ENGINE: "mock"
+# 开启真实图谱:取消注释下一行(还需上面"注"的四项;详见 docs/deploy.md「开启真实知识图谱」)。
+FP_KB_GRAPH_ENGINE: "lightrag"
+# 图谱查询端点开关:"1"=开(默认);"0"=端点返回 404。
+FP_KB_GRAPH: "1"
+
+# ── 路径(留空=代码默认;一般无需改)──────────────────────────────────────────────
+# 知识库根目录(默认 data/knowledge)。
+FP_KNOWLEDGE_DIR: ""
+# LLM 配置文件路径(默认 config/llm.yml)。
+FP_LLM_CONFIG: ""
+# 代码仓目录(默认 data/repos)。
+FP_REPOS_DIR: ""
+# 代码索引 DB(默认 data/code-index/symbols.db)。
+FP_CODE_INDEX_DB: ""
+# 契约目录覆盖(默认仓内 contracts/;一般仅测试/工具用)。
+CONTRACTS_DIR: ""
+
+# ── 代码仓管理(/admin/repos)──────────────────────────────────────────────────
+# 允许 git clone 的 host 白名单(逗号分隔;留空=不限制由实现决定)。
+FP_REPO_GIT_HOSTS: ""
+# 仓库管理端点开放开关:"1"=开放;留空=关闭。
+FP_REPO_ADMIN: ""
+
+# ── 下游服务地址(留空=未对接,相关功能返回 NOT_CONFIGURED)────────────────────────
+# WrenAI NL2SQL 服务地址(如 http://localhost:8000)。
+WREN_API_URL: ""
+# 代码检索 Zoekt 服务地址。
+ZOEKT_URL: ""
+# 业务写 API 基址(sop-executor;默认 http://localhost)。
+BUSINESS_API_URL: ""

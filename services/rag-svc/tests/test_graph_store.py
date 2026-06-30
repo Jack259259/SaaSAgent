@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 
 from contracts import UserCtx
-from rag_svc import MockGraphProvider, RagService, acl
+from llm import HashingEmbedder, MockProvider
+from rag_svc import (
+    LightRagGraphProvider,
+    MockGraphProvider,
+    RagService,
+    acl,
+    graph_read_dir,
+    graph_working_dir,
+)
 
 
 def _svc() -> RagService:
@@ -125,3 +134,98 @@ async def test_no_provider_returns_empty() -> None:
     svc = RagService(stores={})
     data = await svc.get_graph(_internal(), acl.KB_BUSINESS)
     assert data.nodes == [] and data.stats.total_nodes == 0
+
+
+# ── 图 working_dir 单一事实源 + 缓存失效(ingest↔Provider 接缝;不触 LightRAG)──────── #
+def test_graph_working_dir_layout(tmp_path: Path) -> None:
+    # tenant 缺省 → _global;给定 tenant → 该 tenant 段(红线 9 物理隔离)。
+    assert (
+        graph_working_dir(tmp_path, acl.KB_BUSINESS, None) == tmp_path / acl.KB_BUSINESS / "_global"
+    )
+    assert (
+        graph_working_dir(tmp_path, acl.KB_IT_DESIGN, "t_acme")
+        == tmp_path / acl.KB_IT_DESIGN / "t_acme"
+    )
+
+
+def _lightrag_provider() -> LightRagGraphProvider:
+    # 仅测缓存字典操作;resolver/embedder/provider 不被 invalidate 触达(不构造真实 LightRAG)。
+    return LightRagGraphProvider(
+        working_dir_resolver=lambda kb, tenant: Path("unused"),
+        embedder=HashingEmbedder(),
+        provider=MockProvider([]),
+    )
+
+
+def test_invalidate_drops_cached_instance() -> None:
+    prov = _lightrag_provider()
+    prov._cache[(acl.KB_BUSINESS, "_global")] = object()  # 占位实例(ingest 重建后应失效)
+    prov.invalidate(acl.KB_BUSINESS)  # tenant 缺省 → _global
+    assert (acl.KB_BUSINESS, "_global") not in prov._cache
+
+
+def test_invalidate_explicit_tenant_and_missing_noop() -> None:
+    prov = _lightrag_provider()
+    prov._cache[(acl.KB_BUSINESS, "t_acme")] = object()
+    prov.invalidate(acl.KB_BUSINESS, "t_acme")
+    assert (acl.KB_BUSINESS, "t_acme") not in prov._cache
+    prov.invalidate(acl.KB_IT_DESIGN)  # 不存在的键 → 不抛
+
+
+def test_graph_read_dir_falls_back_to_global(tmp_path: Path) -> None:
+    # 无租户私有 graphml → 回退 _global;有私有图则用租户目录(红线 9 私有图优先)。
+    assert (
+        graph_read_dir(tmp_path, acl.KB_BUSINESS, "t_acme")
+        == tmp_path / acl.KB_BUSINESS / "_global"
+    )
+    assert graph_read_dir(tmp_path, acl.KB_BUSINESS, None) == tmp_path / acl.KB_BUSINESS / "_global"
+    tenant_dir = tmp_path / acl.KB_BUSINESS / "t_acme"
+    tenant_dir.mkdir(parents=True)
+    (tenant_dir / "graph_chunk_entity_relation.graphml").write_text("", encoding="utf-8")
+    assert graph_read_dir(tmp_path, acl.KB_BUSINESS, "t_acme") == tenant_dir
+
+
+def test_invalidate_clears_all_tenant_keys_for_kb() -> None:
+    # graph_read_dir 下多租户键可能同指 _global;重建后须清该 kb 全部键(异库不受影响)。
+    prov = _lightrag_provider()
+    prov._cache[(acl.KB_BUSINESS, "_global")] = object()
+    prov._cache[(acl.KB_BUSINESS, "t_acme")] = object()
+    prov._cache[(acl.KB_IT_DESIGN, "_global")] = object()
+    prov.invalidate(acl.KB_BUSINESS)
+    assert not any(k[0] == acl.KB_BUSINESS for k in prov._cache)
+    assert (acl.KB_IT_DESIGN, "_global") in prov._cache  # 异库不动
+
+
+async def test_aclose_finalizes_then_drops_keys() -> None:
+    # aclose:重建前对该 kb 缓存实例先 finalize(释放句柄)再移除;异库不动。
+    prov = _lightrag_provider()
+
+    class _Store:
+        def __init__(self) -> None:
+            self.finalized = False
+
+        async def finalize(self) -> None:
+            self.finalized = True
+
+    biz = _Store()
+    other = _Store()
+    prov._cache[(acl.KB_BUSINESS, "_global")] = biz
+    prov._cache[(acl.KB_BUSINESS, "t_acme")] = _Store()
+    prov._cache[(acl.KB_IT_DESIGN, "_global")] = other
+    await prov.aclose(acl.KB_BUSINESS)
+    assert biz.finalized is True
+    assert not any(k[0] == acl.KB_BUSINESS for k in prov._cache)
+    assert (acl.KB_IT_DESIGN, "_global") in prov._cache and other.finalized is False
+
+
+async def test_aclose_swallows_finalize_error_and_still_drops() -> None:
+    # 单个实例 finalize 抛错被吞(best-effort),缓存仍移除,不阻断重建。
+    prov = _lightrag_provider()
+
+    class _Bad:
+        async def finalize(self) -> None:
+            raise RuntimeError("close failed")
+
+    prov._cache[(acl.KB_BUSINESS, "_global")] = _Bad()
+    await prov.aclose(acl.KB_BUSINESS)
+    assert (acl.KB_BUSINESS, "_global") not in prov._cache

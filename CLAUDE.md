@@ -141,7 +141,7 @@ make sop-validate    # assets/sops schema 校验 + 静态交叉校验
 v0 为离线自洽闭环(全部 fixture/stub)。投产前的真实接入(均已留契约/适配位):
 
 1. **数据库对接**:data-svc 接只读库账号 + WrenAI(`WREN_API_URL` / `DB_DSN_READONLY`;PostgresExecutor / WrenAdapter 已留),并核对真实语义层 MDL(替换虚构 3 表)。
-2. **知识上传**:rag-svc 真实文档摄取与 LightRAG 后端(`LightRagStore` 已留);按租户/ACL 灌库。
+2. **知识上传**:rag-svc 真实文档摄取与 LightRAG 后端(`LightRagStore` 已留);按租户/ACL 灌库。**知识图谱建图+读图已端到端打通**(`lightrag-hku` 可选依赖 + 真实 LLM + `FP_KB_GRAPH_ENGINE=lightrag`,Stage 2);检索 `LightRagStore.search` 仍待生产化。
 3. **代码仓放入**:code-svc 索引真实只读仓(`index_repos` 已就位),配置受控仓清单。
 4. **生产沙箱**:run_analysis 用 `ContainerRunner` 替换开发态 `SubprocessRunner`(强隔离落地)。
 5. **审批引擎对接**:escalate/notify/sop 写回对接真实工单与业务写 API(`HttpCaller` 已留)。

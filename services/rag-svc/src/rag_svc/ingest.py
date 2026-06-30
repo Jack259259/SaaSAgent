@@ -9,15 +9,24 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import importlib.util
+import os
+import shutil
+import uuid
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from llm import HashingEmbedder
+from llm import HashingEmbedder, NotConfiguredError
 
 from . import acl
 from .chunking import chunk_body, parse_document
+from .graph import graph_working_dir
+from .lightrag_store import LightRagStore
 from .models import Chunk
 from .store import LocalKnowledgeStore
+
+if TYPE_CHECKING:
+    from llm import Provider
 
 _DEFAULT_STORE_DIR = "data/knowledge/.index"
 
@@ -27,8 +36,18 @@ def _sha256(path: Path) -> str:
 
 
 async def ingest_dir(
-    *, kb: str, src: Path, store_dir: Path, tenant: str | None = None
+    *,
+    kb: str,
+    src: Path,
+    store_dir: Path,
+    tenant: str | None = None,
+    graph_dir: Path | None = None,
+    graph_provider: Provider | None = None,
 ) -> dict[str, int]:
+    """检索索引:空目录幂等 + sha256 增量;``graph_dir`` 给定(仅 lightrag)时额外全量重建知识图谱。
+
+    ``graph_dir`` / ``graph_provider`` 缺省 None → 现有行为不变(默认/CI/mock 不建图)。
+    """
     index_path = store_dir / kb / "index.json"
     store = LocalKnowledgeStore.load(index_path, embedder=HashingEmbedder())
 
@@ -78,7 +97,104 @@ async def ingest_dir(
         stats["chunks_added"] += len(chunks)
 
     store.save(index_path)
+
+    if graph_dir is not None and graph_provider is not None:
+        # lightrag 引擎:在检索索引(.index)之外**额外**全量(重)建知识图谱(.graph)。
+        # 写入目录经 graph_working_dir 与 LightRagGraphProvider 读取目录同一事实源。
+        await _rebuild_graph(
+            kb=kb,
+            src=src,
+            working_dir=graph_working_dir(graph_dir, kb, tenant),
+            provider=graph_provider,
+        )
     return stats
+
+
+async def _rebuild_graph(*, kb: str, src: Path, working_dir: Path, provider: Provider) -> None:
+    """「重新入库」全量重建:把当前全部文档重抽取进**临时目录**,成功后**原子替换**既有图。
+
+    相比旧「先 rmtree 既有图再原地重建」,本实现保证**永不丢图**(尤其 Windows):
+    - 建到全新临时目录 → 避开读侧 LightRAG 实例对既有目录的文件占用;
+    - 仅在重建成功后 rename-aside 原子替换;既有目录被占用 → rename 抛错 → 旧图原样保留 + 调用方
+      置 job=failed(不再 ``ignore_errors`` 静默吞错而产出空图);
+    - 任意步骤失败 → 清理临时目录、保留旧图、向上抛。
+
+    读侧句柄的释放由调用方(``kb._run_ingest`` 经 ``deps.aclose_kb_graph``)在本函数之前完成。
+    与检索索引解耦(各自存储),复用 parse_document / chunk_body 同口径切块;embedding/llm 经
+    LightRagStore → packages/llm 网关。全量重建保证图==当前文档集(增/改/删一致)。
+    """
+    # 防御:lightrag 不可用时先报错,绝不触碰既有图(否则误配入库会清空现有图)。
+    if importlib.util.find_spec("lightrag") is None:
+        raise NotConfiguredError("LightRAG 未安装(uv sync --all-packages --extra lightrag)")
+
+    files = sorted(p for p in src.rglob("*") if p.is_file()) if src.exists() else []
+    default_tag = "internal" if kb == acl.KB_IT_DESIGN else "public"
+    chunks: list[Chunk] = []
+    for path in files:
+        parsed = parse_document(path)
+        if parsed is None:
+            continue  # 不支持/损坏类型(与索引循环同口径)
+        rel = path.relative_to(src).as_posix()
+        meta: dict[str, Any] = parsed.metadata
+        raw_tags = meta.get("acl_tags")
+        acl_tags = list(raw_tags) if isinstance(raw_tags, list) and raw_tags else [default_tag]
+        source = str(meta.get("source") or rel)
+        raw_tenant = meta.get("tenant_id")
+        doc_id = f"{kb}:{rel}"
+        chunks.extend(
+            Chunk(
+                chunk_id=f"{doc_id}:{i}",
+                doc_id=doc_id,
+                kb=kb,
+                source=source,
+                location=location,
+                text=text,
+                acl_tags=acl_tags,
+                tenant_id=str(raw_tenant) if raw_tenant else None,
+            )
+            for i, (location, text) in enumerate(chunk_body(parsed.body))
+        )
+
+    # 建到全新临时目录(无既有句柄),成功后原子替换;失败清临时、留旧图。
+    tmp_dir = working_dir.parent / f"{working_dir.name}.tmp-{uuid.uuid4().hex}"
+    shutil.rmtree(tmp_dir, ignore_errors=True)  # 极小概率撞名残留先清(临时垃圾)
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        if chunks:
+            store = LightRagStore(
+                working_dir=tmp_dir, embedder=HashingEmbedder(), provider=provider
+            )
+            try:
+                # LightRAG ainsert:实体/关系抽取建图(经网关 LLM)
+                await store.insert(chunks)
+            finally:
+                await store.finalize()  # 释放临时实例句柄,确保下面能 rename tmp_dir
+        _atomic_replace_dir(tmp_dir, working_dir)
+    except BaseException:
+        shutil.rmtree(tmp_dir, ignore_errors=True)  # 失败:清临时,旧图(若有)未动
+        raise
+
+
+def _atomic_replace_dir(src_dir: Path, dst_dir: Path) -> None:
+    """把 ``src_dir`` 原子替换为 ``dst_dir``(旧目录 rename 挪走 → 新目录就位 → 删旧目录)。
+
+    Windows 下 rename 被占用的目录会抛错:故旧目录被占用时第一步即抛(``dst_dir`` 原样保留),由
+    调用方清理临时目录并向上报错;第二步失败则回滚(旧目录复位)。挪走的旧目录是垃圾,删除用
+    ``ignore_errors``(删不掉留待下次,不影响新图就位)。
+    """
+    backup: Path | None = None
+    if dst_dir.exists():
+        backup = dst_dir.parent / f"{dst_dir.name}.old-{uuid.uuid4().hex}"
+        os.replace(dst_dir, backup)  # 被占用 → 抛(此前未动 dst_dir,旧图保留)
+    try:
+        dst_dir.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(src_dir, dst_dir)
+    except BaseException:
+        if backup is not None:
+            os.replace(backup, dst_dir)  # 回滚:旧图复位
+        raise
+    if backup is not None:
+        shutil.rmtree(backup, ignore_errors=True)
 
 
 def main(argv: list[str] | None = None) -> int:

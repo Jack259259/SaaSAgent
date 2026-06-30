@@ -64,6 +64,12 @@ uv run ingest --kb business   --src data/knowledge/tenants/t_acme --tenant t_acm
 ## 生产引擎(LightRagStore)
 
 默认引擎为 `LocalKnowledgeStore`(本地文件 + 词法哈希向量,确定性)。生产可切 `LightRagStore`
-(真 LightRAG,`pip install lightrag-hku`):其 embedding_func / llm_model_func **经 packages/llm 网关**
+(真 LightRAG,可选依赖 `lightrag-hku`):其 embedding_func / llm_model_func **经 packages/llm 网关**
 (不直连厂商 SDK)。注意 LightRAG **无元数据候选过滤**,检索前 ACL 仍须 RagService 入口层负责
 (按库/标签分区入库);存储后端可选本地文件或 postgres(pgvector)。
+
+**开启真实知识图谱**(独立于上面的检索引擎,见 `backend-gaps.md` §I):① 装可选依赖
+`uv sync --all-packages --extra lightrag`(pin `lightrag-hku==1.5.4`,默认/CI 不装)+ ② 真实 LLM
+(`config/llm.yml` 非 `dev_stub`/非 Mock)+ ③ `config/app.yml` 设 `FP_KB_GRAPH_ENGINE=lightrag`(+ `FP_KB_GRAPH≠0`)。
+本地起:`uv sync --extra lightrag` 后 `uv run --no-sync python -m uvicorn agent_gateway.app:app …`
+(`make dev` 会 sync 掉 extra,故用 `--no-sync`)。建图经 `POST /admin/kb/{kb}/ingest`,前端「查看知识图谱」面板展示。

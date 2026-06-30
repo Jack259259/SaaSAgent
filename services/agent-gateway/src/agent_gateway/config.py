@@ -15,6 +15,13 @@ import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
+# 接口格式开关(config/llm.yml 的 LLM_Interface_Format)。两种格式共用 url/api_key/model;
+# 缺失默认 anthropic(向后兼容,现有配置不受影响)。归一化为小写存储。
+_DEFAULT_INTERFACE_FORMAT = "anthropic"
+# 归一化(小写)值 → 给用户看的规范写法(用于报错提示)。
+_INTERFACE_FORMAT_LABELS = {"anthropic": "Anthropic", "openai": "OpenAI"}
+_VALID_INTERFACE_FORMATS = tuple(_INTERFACE_FORMAT_LABELS)
+
 
 @dataclass(frozen=True)
 class LlmConfig:
@@ -22,6 +29,7 @@ class LlmConfig:
     model: str
     base_url: str | None
     dev_stub: bool
+    interface_format: str  # "anthropic" | "openai"(已归一化小写)
 
 
 def _expand(value: Any) -> str | None:
@@ -32,6 +40,24 @@ def _expand(value: Any) -> str | None:
     if not s or s.startswith("${"):
         return None
     return s
+
+
+def _resolve_interface_format(data: dict[str, Any]) -> str:
+    """LLM_Interface_Format(env 回退 LLM_INTERFACE_FORMAT)→ 归一化小写;缺失默认 anthropic。
+
+    非法值在此(启动加载配置阶段)即抛 ValueError,给出清晰报错(含非法值与允许取值)。
+    """
+    raw = _expand(data.get("LLM_Interface_Format")) or os.environ.get("LLM_INTERFACE_FORMAT")
+    if not raw:
+        return _DEFAULT_INTERFACE_FORMAT
+    normalized = raw.strip().lower()
+    if normalized not in _VALID_INTERFACE_FORMATS:
+        allowed = " | ".join(f'"{label}"' for label in _INTERFACE_FORMAT_LABELS.values())
+        raise ValueError(
+            f'LLM_Interface_Format 取值非法:"{raw}"。允许的取值为 {allowed}(大小写不敏感);'
+            "留空或省略则默认 Anthropic。请检查 config/llm.yml(或环境变量 LLM_INTERFACE_FORMAT)。"
+        )
+    return normalized
 
 
 def load_llm_config() -> LlmConfig:
@@ -52,4 +78,11 @@ def load_llm_config() -> LlmConfig:
         or None
     )
     dev_stub = bool(data.get("dev_stub", False)) or os.environ.get("FP_DEV_STUB") == "1"
-    return LlmConfig(api_key=api_key, model=model, base_url=base_url, dev_stub=dev_stub)
+    interface_format = _resolve_interface_format(data)
+    return LlmConfig(
+        api_key=api_key,
+        model=model,
+        base_url=base_url,
+        dev_stub=dev_stub,
+        interface_format=interface_format,
+    )
