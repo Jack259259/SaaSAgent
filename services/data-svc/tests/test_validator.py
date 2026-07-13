@@ -65,6 +65,43 @@ def test_cte_definition_injected_reference_not_table(validator: SqlValidator) ->
     assert [a.table for a in out.lineage.rls_applied] == ["fund_plan"]
 
 
+def test_same_name_cte_definition_still_gets_rls(validator: SqlValidator) -> None:
+    # 同名 CTE(WrenAI dry_plan 典型输出形态)不得遮蔽定义内部的真实基表:
+    # CTE 体内的 fund_plan 是基表,必须注入 RLS 且计入血缘;外层引用是 CTE 不注入。
+    sql = (
+        "WITH fund_plan AS (SELECT plan_id, tenant_id FROM fund_plan) SELECT plan_id FROM fund_plan"
+    )
+    out = validator.validate(sql, tenant_id="t1")
+    assert out.sql.count("tenant_id = 't1'") == 1
+    assert [a.table for a in out.lineage.rls_applied] == ["fund_plan"]
+    assert out.lineage.tables == ["fund_plan"]
+
+
+def test_same_name_cte_wrapping_forbidden_table_rejected(validator: SqlValidator) -> None:
+    # 同名 CTE 也不得遮蔽白名单校验:CTE 体内的越权基表必须被拒。
+    sql = "WITH secret_table AS (SELECT * FROM secret_table) SELECT * FROM secret_table"
+    with pytest.raises(ValidationError, match="白名单"):
+        validator.validate(sql, tenant_id="t1")
+
+
+def test_schema_qualified_table_allowed_and_rls(validator: SqlValidator) -> None:
+    # schema 限定名按末段匹配白名单(既有口径,显式固化);RLS 照常注入。
+    out = validator.validate("SELECT plan_id FROM public.fund_plan", tenant_id="t1")
+    assert "tenant_id = 't1'" in out.sql
+    assert [a.table for a in out.lineage.rls_applied] == ["fund_plan"]
+
+
+def test_schema_qualified_unknown_table_rejected(validator: SqlValidator) -> None:
+    with pytest.raises(ValidationError, match="白名单"):
+        validator.validate("SELECT * FROM public.admin_secrets", tenant_id="t1")
+
+
+def test_union_arms_each_injected(validator: SqlValidator) -> None:
+    sql = "SELECT plan_id FROM fund_plan UNION ALL SELECT plan_id FROM fund_plan"
+    out = validator.validate(sql, tenant_id="t1")
+    assert out.sql.count("tenant_id = 't1'") == 2
+
+
 def test_limit_added_when_missing(validator: SqlValidator) -> None:
     out = validator.validate("SELECT plan_id FROM fund_plan", tenant_id="t1")
     assert "LIMIT 1000" in out.sql.upper()

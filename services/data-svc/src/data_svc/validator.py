@@ -69,33 +69,38 @@ class SqlValidator:
         if tree.find(exp.Select) is None:
             raise ValidationError("仅允许 SELECT 查询")
 
-    def _cte_names(self, tree: exp.Expression) -> set[str]:
-        return {cte.alias_or_name for cte in tree.find_all(exp.CTE)}
-
     def _base_table_names(self, tree: exp.Expression) -> set[str]:
-        ctes = self._cte_names(tree)
-        return {t.name for t in tree.find_all(exp.Table) if t.name not in ctes}
+        return {
+            source.name
+            for scope in traverse_scope(tree)
+            for source in scope.sources.values()
+            if isinstance(source, exp.Table)
+        }
 
     def _check_tables_and_inject_rls(
         self, tree: exp.Expression, *, tenant_id: str
     ) -> list[RlsApplied]:
-        ctes = self._cte_names(tree)
+        # 基表判定按词法作用域(scope.sources):source 是 exp.Table 才是基表,CTE/子查询
+        # 引用是 Scope 对象自然跳过。不可用"全局 CTE 名字集合"排除 —— 同名 CTE
+        # (WITH fund_plan AS (… FROM fund_plan) …,WrenAI dry_plan 的典型输出形态)
+        # 会遮蔽其定义内部的真实基表,导致白名单与 RLS 双双被绕过。
         applied: list[RlsApplied] = []
         for scope in traverse_scope(tree):
             select = scope.expression
             if not isinstance(select, exp.Select):
                 continue
-            for table in scope.tables:
-                name = table.name
-                if name in ctes:
-                    continue  # CTE 引用不是基表
+            for source in scope.sources.values():
+                if not isinstance(source, exp.Table):
+                    continue
+                # schema 限定名(public.fund_plan)按末段匹配白名单;越权 schema 由只读账号权限约束。
+                name = source.name
                 if not self._sem.is_allowed(name):
                     raise ValidationError(f"表不在白名单:{name}")
                 tcol = self._sem.tenant_column(name)
                 if tcol is None:
                     continue
                 predicate = exp.EQ(
-                    this=exp.column(tcol, table=table.alias_or_name),
+                    this=exp.column(tcol, table=source.alias_or_name),
                     expression=exp.Literal.string(tenant_id),
                 )
                 select.where(predicate, append=True, copy=False)
