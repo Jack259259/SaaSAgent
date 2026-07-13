@@ -1,0 +1,59 @@
+# 资金计划(虚构示例表,与 assets/semantic-layer/tables.yaml 白名单逐列对应;
+# 真实表替换指引见 ../../README.md)。
+# table_reference 用裸表名(catalog/schema 留空):dry_plan 输出与校验层白名单
+# 的末段匹配口径一致,且占位 run_sql(DuckDB)与 GaussDB search_path 均可直接执行。
+name: fund_plan
+table_reference:
+  catalog: ""
+  schema: ""
+  table: fund_plan
+columns:
+  - name: plan_id
+    type: VARCHAR
+    is_calculated: false
+    not_null: true
+    is_primary_key: true
+    properties: {}
+  - name: tenant_id
+    type: VARCHAR
+    is_calculated: false
+    not_null: true
+    properties: {}
+  - name: org_id
+    type: VARCHAR
+    is_calculated: false
+    not_null: true
+    properties: {}
+  - name: period
+    type: VARCHAR
+    is_calculated: false
+    not_null: true
+    properties:
+      description: "期间,格式如 2026Q1"
+  - name: plan_amount
+    type: DECIMAL
+    is_calculated: false
+    not_null: false
+    properties:
+      description: "计划金额(元)"
+  - name: exec_amount
+    type: DECIMAL
+    is_calculated: false
+    not_null: false
+    properties:
+      description: "执行金额(元)"
+  - name: currency
+    type: VARCHAR
+    is_calculated: false
+    not_null: false
+    properties: {}
+  - name: version
+    type: VARCHAR
+    is_calculated: false
+    not_null: false
+    properties:
+      description: "计划版本号"
+primary_key: plan_id
+cached: false
+properties:
+  description: "资金计划主表:每行一个组织在一个期间的一版资金计划"

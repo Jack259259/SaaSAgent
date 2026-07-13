@@ -1,0 +1,14 @@
+# 模型间关系(JOIN 语义;供 MDL planning 与 LLM 取数参考)。
+relationships:
+  - name: plan_subject_fund_plan
+    models:
+      - plan_subject
+      - fund_plan
+    join_type: MANY_TO_ONE
+    condition: plan_subject.plan_id = fund_plan.plan_id
+  - name: exec_flow_fund_plan
+    models:
+      - exec_flow
+      - fund_plan
+    join_type: MANY_TO_ONE
+    condition: exec_flow.plan_id = fund_plan.plan_id

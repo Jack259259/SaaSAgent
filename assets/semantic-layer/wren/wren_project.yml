@@ -1,0 +1,12 @@
+# Wren 语义层项目(资产,走评审 —— 红线 10)。编译/校验:make wren-build;产物 target/ 不入库。
+# data_source=postgres 是 GaussDB 的 PG 兼容口径(方言差异约束见 knowledge/rules/general.md;
+# GaussDB 兼容模式 PG/ORA/MySQL 待与用户确认,非 PG 模式需调整此处与 few-shot)。
+schema_version: 5
+name: zijin_plan
+version: "1.0"
+
+# Wren Engine 命名空间(非数据库的 catalog/schema;库内真实位置在各 model 的 table_reference)。
+catalog: wren
+schema: public
+
+data_source: postgres

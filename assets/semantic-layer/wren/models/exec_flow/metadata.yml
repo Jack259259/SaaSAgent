@@ -1,0 +1,46 @@
+# 执行流水(虚构示例表;口径与维护约定见 ../../README.md)。
+name: exec_flow
+table_reference:
+  catalog: ""
+  schema: ""
+  table: exec_flow
+columns:
+  - name: flow_id
+    type: VARCHAR
+    is_calculated: false
+    not_null: true
+    is_primary_key: true
+    properties: {}
+  - name: tenant_id
+    type: VARCHAR
+    is_calculated: false
+    not_null: true
+    properties: {}
+  - name: plan_id
+    type: VARCHAR
+    is_calculated: false
+    not_null: true
+    properties:
+      description: "所属资金计划(fund_plan.plan_id)"
+  - name: exec_date
+    type: DATE
+    is_calculated: false
+    not_null: true
+    properties:
+      description: "执行日期"
+  - name: amount
+    type: DECIMAL
+    is_calculated: false
+    not_null: false
+    properties:
+      description: "流水金额(元)"
+  - name: status
+    type: VARCHAR
+    is_calculated: false
+    not_null: false
+    properties:
+      description: "流水状态:SUCCESS / FAILED / PENDING"
+primary_key: flow_id
+cached: false
+properties:
+  description: "执行流水:资金计划的逐笔执行记录"

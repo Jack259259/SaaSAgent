@@ -1,0 +1,45 @@
+# 计划科目(虚构示例表;口径与维护约定见 ../../README.md)。
+name: plan_subject
+table_reference:
+  catalog: ""
+  schema: ""
+  table: plan_subject
+columns:
+  - name: subject_id
+    type: VARCHAR
+    is_calculated: false
+    not_null: true
+    is_primary_key: true
+    properties: {}
+  - name: tenant_id
+    type: VARCHAR
+    is_calculated: false
+    not_null: true
+    properties: {}
+  - name: plan_id
+    type: VARCHAR
+    is_calculated: false
+    not_null: true
+    properties:
+      description: "所属资金计划(fund_plan.plan_id)"
+  - name: subject_code
+    type: VARCHAR
+    is_calculated: false
+    not_null: true
+    properties:
+      description: "科目编码"
+  - name: subject_name
+    type: VARCHAR
+    is_calculated: false
+    not_null: false
+    properties: {}
+  - name: amount
+    type: DECIMAL
+    is_calculated: false
+    not_null: false
+    properties:
+      description: "科目金额(元)"
+primary_key: subject_id
+cached: false
+properties:
+  description: "计划科目明细:资金计划按科目拆分的金额"
