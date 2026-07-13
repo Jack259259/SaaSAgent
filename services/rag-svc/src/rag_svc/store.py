@@ -89,6 +89,9 @@ class LocalKnowledgeStore:
     def set_file_hash(self, rel_path: str, digest: str) -> None:
         self._file_hashes[rel_path] = digest
 
+    def remove_file_hash(self, rel_path: str) -> None:
+        self._file_hashes.pop(rel_path, None)
+
     def remove_doc(self, doc_id: str) -> None:
         for chunk_id in [cid for cid, c in self._chunks.items() if c.doc_id == doc_id]:
             del self._chunks[chunk_id]
