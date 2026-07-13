@@ -70,6 +70,11 @@ ignore_missing_imports = true
 module = ["langfuse", "langfuse.*"]
 ignore_missing_imports = true
 
+# wrenai(data_svc WrenLocalEngine 的嵌入式语义引擎,可选 extra "wren",懒导入)—— 缺失导入豁免。
+[[tool.mypy.overrides]]
+module = ["wren", "wren.*", "wrenai", "wrenai.*"]
+ignore_missing_imports = true
+
 # tree-sitter 语言 grammar 包(C 扩展,未随包提供类型)—— 视为 Any。
 [[tool.mypy.overrides]]
 module = [

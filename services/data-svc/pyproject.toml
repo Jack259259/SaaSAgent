@@ -12,6 +12,12 @@ dependencies = [
     "pyyaml>=6",
 ]
 
+# 嵌入式 WrenAI(NL2SQL 语义层/dry_run 校验/dry_plan 方言转换,不执行查询)。
+# 默认不安装(照 rag-svc lightrag 先例):uv sync --all-packages --extra wren。
+# 红线 1 门禁:该依赖树禁止出现 langchain/langgraph/crewai(见 docs/integration/wrenai.md)。
+[project.optional-dependencies]
+wren = ["wrenai>=0.13,<0.14"]
+
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]
 build-backend = "uv_build"

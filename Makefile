@@ -21,7 +21,7 @@ MYPY_PATHS := $(foreach p,$(PKGS),$(p)/src $(p)/tests) evals/src evals/tests tes
 
 EVAL_SETS := nl2sql rag-qa code-qa sop-replay e2e
 
-.PHONY: help sync dev dev-graph test lint contract-test eval sop-validate
+.PHONY: help sync dev dev-graph test lint contract-test eval sop-validate wren-build
 .DEFAULT_GOAL := help
 
 help:
@@ -32,6 +32,7 @@ help:
 	@echo "make contract-test   # contract tests [stage 1]"
 	@echo "make eval E=nl2sql   # eval regression (nl2sql|rag-qa|code-qa|sop-replay|e2e) [stage 10]"
 	@echo "make sop-validate    # assets/sops schema + static cross-checks [stage 8]"
+	@echo "make wren-build      # validate + compile wren semantic layer (installs extra wren)"
 
 sync:
 	$(UV) sync --all-packages
@@ -83,3 +84,11 @@ endif
 # assets/sops schema 校验 + 静态交叉校验(阶段 8 真实现)。
 sop-validate: sync
 	$(UV) run python -m sop_executor.sopcheck assets/sops
+
+# Wren 语义层校验+编译(assets/semantic-layer/wren;产物 target/ 不入库,.gitignore)。
+# 装可选 extra "wren" 后用 --no-sync 跑(防再次 sync 卸掉 extra,同 dev-graph 约定);
+# 经包装脚本 python 直调(Windows 非 ASCII 仓路径下 console-script trampoline 不可用,见 dev 注释)。
+wren-build:
+	$(UV) sync --all-packages --extra wren
+	$(UV) run --no-sync python scripts/wren_cli.py context validate --path assets/semantic-layer/wren
+	$(UV) run --no-sync python scripts/wren_cli.py context build --path assets/semantic-layer/wren
