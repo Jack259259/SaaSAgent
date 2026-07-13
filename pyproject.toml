@@ -75,6 +75,11 @@ ignore_missing_imports = true
 module = ["wren", "wren.*", "wrenai", "wrenai.*"]
 ignore_missing_imports = true
 
+# pandas(data_svc run_sql 接缝的 DataFrame 契约)—— 不随包提供类型(stubs 独立包,不引入)。
+[[tool.mypy.overrides]]
+module = ["pandas", "pandas.*"]
+ignore_missing_imports = true
+
 # tree-sitter 语言 grammar 包(C 扩展,未随包提供类型)—— 视为 Any。
 [[tool.mypy.overrides]]
 module = [

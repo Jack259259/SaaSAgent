@@ -30,13 +30,16 @@ from .models import (
 )
 from .semantic_layer import SemanticLayer, TableSpec
 from .service import DataService
+from .user_executor import DataFrameFunctionExecutor, run_sql
 from .validator import SqlValidator
+from .wren_local import WrenLocalEngine, WrenPlanner
 
 __version__ = "0.1.0"
 
 __all__ = [
     "AmbiguousFieldError",
     "Clarification",
+    "DataFrameFunctionExecutor",
     "DataService",
     "DataSvcError",
     "DuckDBExecutor",
@@ -58,5 +61,8 @@ __all__ = [
     "ValidatedQuery",
     "ValidationError",
     "WrenAdapter",
+    "WrenLocalEngine",
+    "WrenPlanner",
     "__version__",
+    "run_sql",
 ]

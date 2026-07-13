@@ -36,8 +36,20 @@ FP_REPO_GIT_HOSTS: ""
 # 仓库管理端点开放开关:"1"=开放;留空=关闭。
 FP_REPO_ADMIN: ""
 
+# ── 取数 NL2SQL(data-svc;详见 docs/integration/wrenai.md)───────────────────────
+# 引擎:留空(默认)= WrenAdapter(legacy HTTP,需 WREN_API_URL);
+#       "wren_local" = 嵌入式 WrenAI(统一 LLM 通道生成 SQL + wren 校验/方言转换;
+#       需先 uv sync --all-packages --extra wren,语义层资产在 assets/semantic-layer/wren)。
+FP_NL2SQL_ENGINE: ""
+# Wren 语义层项目目录(留空=assets/semantic-layer/wren)。
+FP_WREN_PROJECT_DIR: ""
+# 执行器:留空(默认)= PostgresExecutor(需 secrets 的 DB_DSN_READONLY);
+#         "user_func" = 用户自有执行代码(data_svc/user_executor.py 的 run_sql 函数,
+#         输入 SQL 返回 DataFrame;当前为 DuckDB 占位实现,替换函数体即接 GaussDB)。
+FP_DATA_EXECUTOR: ""
+
 # ── 下游服务地址(留空=未对接,相关功能返回 NOT_CONFIGURED)────────────────────────
-# WrenAI NL2SQL 服务地址(如 http://localhost:8000)。
+# legacy HTTP NL2SQL 服务地址(仅 FP_NL2SQL_ENGINE 留空/wren_http 时使用)。
 WREN_API_URL: ""
 # 代码检索 Zoekt 服务地址。
 ZOEKT_URL: ""

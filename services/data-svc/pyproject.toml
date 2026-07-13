@@ -5,11 +5,13 @@ description = "WrenAI 代理 + SQL 校验层 + RLS 注入 + 只读执行(CLAUDE.
 requires-python = ">=3.12"
 dependencies = [
     "contracts",
+    "llm",
     "pydantic>=2.7",
     "sqlglot>=25",
     "duckdb>=1.0",
     "httpx>=0.27",
     "pyyaml>=6",
+    "pandas>=2",
 ]
 
 # 嵌入式 WrenAI(NL2SQL 语义层/dry_run 校验/dry_plan 方言转换,不执行查询)。
@@ -24,3 +26,4 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 contracts = { workspace = true }
+llm = { workspace = true }

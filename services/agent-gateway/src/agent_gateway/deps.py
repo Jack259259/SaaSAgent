@@ -6,7 +6,18 @@ import os
 from pathlib import Path
 
 from code_svc import CodeService
-from data_svc import DataService, PostgresExecutor, SemanticLayer, SqlValidator, WrenAdapter
+from data_svc import (
+    DataFrameFunctionExecutor,
+    DataService,
+    NL2SQLEngine,
+    PostgresExecutor,
+    ReadOnlyExecutor,
+    SemanticLayer,
+    SqlValidator,
+    WrenAdapter,
+    WrenLocalEngine,
+    run_sql,
+)
 from llm import (
     AnthropicProvider,
     HashingEmbedder,
@@ -96,15 +107,46 @@ def get_provider() -> Provider:
     return AnthropicProvider(model=cfg.model, api_key=cfg.api_key, base_url=cfg.base_url)
 
 
-def _data_service() -> DataService:
-    """生产默认:WrenAdapter(WREN_API_URL)+ 校验层(tables.yaml)+ PostgresExecutor(DB_DSN_READONLY)。
+def _nl2sql_engine() -> NL2SQLEngine:
+    """FP_NL2SQL_ENGINE 选取数引擎(配置见 config/app.yml,详见 docs/integration/wrenai.md)。
 
-    未配置 WREN_API_URL / DB_DSN_READONLY 时调用即 NOT_CONFIGURED;校验层(红线 6)始终生效。
+    ""(默认)/"wren_http" → WrenAdapter(legacy HTTP;未配 WREN_API_URL 即 NOT_CONFIGURED,现状不变);
+    "wren_local" → 嵌入式 WrenAI(统一 LLM 通道生成 + wren strict 校验/dry_plan 方言转换;
+    需 uv sync --all-packages --extra wren + assets/semantic-layer/wren 资产,缺则 NOT_CONFIGURED)。
     """
+    kind = os.environ.get("FP_NL2SQL_ENGINE", "").strip()
+    if kind == "wren_local":
+        project = os.environ.get("FP_WREN_PROJECT_DIR", "").strip()
+        return WrenLocalEngine(
+            provider=get_provider(), project_dir=Path(project) if project else None
+        )
+    if kind in ("", "wren_http"):
+        return WrenAdapter()
+    raise ValueError(f"未知 FP_NL2SQL_ENGINE:{kind}")
+
+
+def _data_executor() -> ReadOnlyExecutor:
+    """FP_DATA_EXECUTOR 选执行器。
+
+    ""(默认)/"postgres" → PostgresExecutor(DB_DSN_READONLY;未配即 NOT_CONFIGURED,现状不变);
+    "user_func" → DataFrameFunctionExecutor(run_sql):用户自有执行代码接入点
+    (data_svc/user_executor.py,当前为 DuckDB 占位实现,替换函数体即接 GaussDB)。
+    """
+    kind = os.environ.get("FP_DATA_EXECUTOR", "").strip()
+    if kind == "user_func":
+        return DataFrameFunctionExecutor(run_sql)
+    if kind in ("", "postgres"):
+        return PostgresExecutor()
+    raise ValueError(f"未知 FP_DATA_EXECUTOR:{kind}")
+
+
+def _data_service() -> DataService:
+    """取数装配:引擎与执行器均按配置选择(默认保持既有 NOT_CONFIGURED 行为);
+    校验层(红线 6)不参与选择,始终生效。"""
     return DataService(
-        engine=WrenAdapter(),
+        engine=_nl2sql_engine(),
         validator=SqlValidator(SemanticLayer.load()),
-        executor=PostgresExecutor(),
+        executor=_data_executor(),
     )
 
 

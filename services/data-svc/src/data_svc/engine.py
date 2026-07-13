@@ -1,7 +1,9 @@
-"""NL2SQLEngine 接口 + 两实现:WrenAdapter(生产)/ StubEngine(测试与演示)。
+"""NL2SQLEngine 接口 + 两实现:WrenAdapter(legacy)/ StubEngine(测试与演示)。
 
-WrenAI 真实 ask 流程更复杂(异步 ask + 轮询),确切契约在 docs/integration/wrenai.md 对接时固定;
-本阶段不连接,未配置 WREN_API_URL 即 NOT_CONFIGURED。
+生产路线是嵌入式 WrenLocalEngine(wren_local.py,FP_NL2SQL_ENGINE=wren_local;
+见 docs/integration/wrenai.md)。WrenAdapter 保留为 HTTP 后备:对接自建 NL2SQL
+服务的最小同步契约(POST /v1/ask),WrenAI 官方托管栈已 sunset,不再对其适配;
+未配置 WREN_API_URL 即 NOT_CONFIGURED。
 """
 
 from __future__ import annotations
