@@ -67,8 +67,9 @@ API(对齐设计 §8.5.4):
 
 ## H. 知识库管理(已实现)
 
-- **`/admin/kb/{kb}/*`(已实现)**:`agent-gateway` 已落地知识库管理端点(docs 列举 / upload / download / ingest / ingest status),内部管理员鉴权(`require_kb_admin`)+ IT 设计库细 ACL(仅内部角色,`rag_svc.acl.is_internal`,红线 5/§9.1)+ 写操作审计。实现见 `services/agent-gateway/src/agent_gateway/kb.py`,UI 见 `web/`「知识库管理」面板(`web/js/kb.js`)。详见 `docs/integration/knowledge-management.md`。
+- **`/admin/kb/{kb}/*`(已实现)**:`agent-gateway` 已落地知识库管理端点(docs 列举 / upload / download / delete / ingest / ingest status),内部管理员鉴权(`require_kb_admin`)+ IT 设计库细 ACL(仅内部角色,`rag_svc.acl.is_internal`,红线 5/§9.1)+ 写操作审计。实现见 `services/agent-gateway/src/agent_gateway/kb.py`,UI 见 `web/`「知识库管理」面板(`web/js/kb.js`)。详见 `docs/integration/knowledge-management.md`。
   - **ingest 进程内异步**:`asyncio.run(ingest_dir(...))` 后台线程执行(**无子进程 / 无 shell**;kb 取自枚举、src 取自固定映射 → 命令注入面为零),同库串行(运行中再触发 → 409),job 注册表供 `GET .../ingest/status` 轮询。
+  - **文档删除** `DELETE /admin/kb/{kb}/docs/{name}`:**先清检索索引**(chunks + file_hash,经 `LocalKnowledgeStore.remove_doc/remove_file_hash` 持久化;增量 ingest 不清理缺失文件的旧 chunk,故必须先索引后文件)**再物理删除**;同库入库进行中 → `409 INGEST_RUNNING`(与 ingest 持同一锁互斥);**不自动重建知识图谱**——图谱与文档集的同步靠下次「重新入库」(全量重建),前端删除确认弹窗已提示。
   - **文档落盘** `data/knowledge/{business|it-design}/`(env `FP_KNOWLEDGE_DIR` 可覆盖);文件名取 basename + 扩展名白名单(`.md/.markdown/.txt/.docx`)+ realpath 父目录校验(防穿越)+ 25MB 上限 + `parse_document` 试解析(损坏即拒)。
 - **`.docx` 解析已就位(ingest 路径)**:`rag_svc.chunking.parse_document` 现支持 `.docx`(零依赖 stdlib `zipfile`+`xml.etree`,段落保序 + 表格转 Markdown)。**注意:此为知识库 ingest 路径**;§B 的 `parse_user_file`(聊天附件解析)DOCX 仍待补,可复用 `rag_svc.chunking._docx_to_text`。
 - **知识图谱(后端层已实现)**:见 §I。前端「查看知识图谱」按钮当前仍为占位(可视化前端单独成段)。

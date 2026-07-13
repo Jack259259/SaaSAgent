@@ -24,10 +24,11 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from llm import MockProvider
+from llm import HashingEmbedder, MockProvider
 from rag_svc import acl
 from rag_svc.chunking import parse_document
 from rag_svc.ingest import ingest_dir
+from rag_svc.store import LocalKnowledgeStore
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
@@ -204,6 +205,45 @@ def resolve_download(kb: str, name: str) -> Path:
     if not target.is_file():
         raise DocNotFound(f"文档不存在:{name}")
     return target
+
+
+def _purge_index(kb: str, name: str) -> None:
+    """从检索索引清除该文档(chunks + file_hash)并持久化;索引文件不存在 → no-op。
+
+    必须在物理删文件**之前**调用:增量 ingest 只迭代磁盘上存在的文件、不清理缺失文件的
+    旧 chunk,先删文件后清索引一旦失败会留下检索仍可命中的孤儿 chunk;正序失败则只是
+    indexed 翻 False,重试删除或重新入库即可自愈。
+    """
+    index_path = index_dir() / kb / "index.json"
+    if not index_path.is_file():
+        return
+    try:
+        # HashingEmbedder 仅满足 load 签名:chunks 自带向量,load/save 不触发 embed。
+        store = LocalKnowledgeStore.load(index_path, embedder=HashingEmbedder())
+        store.remove_doc(f"{kb}:{name}")  # doc_id 约定 = f"{kb}:{rel}";顶层文档 rel == 文件名
+        store.remove_file_hash(name)
+        store.save(index_path)
+    except (OSError, ValueError) as exc:  # json/pydantic 解析错误均为 ValueError 子类
+        raise KbError("索引清理失败,请稍后重试或重新入库") from exc
+
+
+def delete_doc(kb: str, name: str) -> dict[str, Any]:
+    """删除文档:先清检索索引、后物理删除;ingest 运行中 → IngestRunning/409。
+
+    全程持 _jobs_lock:与 start_ingest 的注册互斥,杜绝"检查通过后 ingest 恰好启动、
+    后台线程读文件/覆写 index.json"的竞态(临界区仅 unlink + 小 JSON 重写,可接受)。
+    **不重建知识图谱**:图谱与文档集的同步靠下次「重新入库」全量重建(见 _rebuild_graph)。
+    """
+    target = doc_path(kb, name)  # validate_kb(→InvalidKb)+ sanitize + realpath 防穿越
+    with _jobs_lock:
+        cur = _jobs.get(kb)
+        if cur is not None and cur.status == "running":
+            raise IngestRunning("该知识库正在入库,请稍候")
+        if not target.is_file():
+            raise DocNotFound(f"文档不存在:{name}")
+        _purge_index(kb, target.name)
+        target.unlink()
+    return {"name": target.name, "deleted": True}
 
 
 # ── ingest job(进程内后台线程 + 状态注册表;同库串行)──────────────────────────

@@ -232,3 +232,103 @@ def test_ingest_concurrent_same_kb_409() -> None:
     kb._jobs["business"] = kb._IngestJob("business")  # status=running
     r = client.post("/admin/kb/business/ingest", headers=h)
     assert r.status_code == 409 and r.json()["code"] == "INGEST_RUNNING"
+
+
+# ---- 删除(物理文件 + 检索索引;安全负例 DoD §7.5) ---------------------------- #
+def _upload_md(client: TestClient, h: dict[str, str], name: str = "guide.md") -> None:
+    r = client.post(
+        "/admin/kb/business/upload",
+        headers=h,
+        files={"file": (name, io.BytesIO("# 标题\n\n执行率口径正文。".encode()), "text/markdown")},
+    )
+    assert r.status_code == 200
+
+
+def test_delete_missing_ctx_401() -> None:
+    assert TestClient(app).delete("/admin/kb/business/docs/guide.md").status_code == 401
+
+
+def test_delete_non_admin_403() -> None:
+    r = TestClient(app).delete("/admin/kb/business/docs/guide.md", headers={"X-User-Ctx": _USER})
+    assert r.status_code == 403
+
+
+def test_delete_it_design_non_internal_403() -> None:
+    r = TestClient(app).delete(
+        "/admin/kb/it_design/docs/guide.md", headers={"X-User-Ctx": _KB_ADMIN}
+    )
+    assert r.status_code == 403
+
+
+def test_delete_invalid_kb_404() -> None:
+    r = TestClient(app).delete("/admin/kb/evil/docs/x.md", headers={"X-User-Ctx": _INTERNAL})
+    assert r.status_code == 404 and r.json()["code"] == "INVALID_KB"
+
+
+def test_delete_flow_purges_index() -> None:
+    """核心流:上传 → 入库 → 删除 → 列表移除 + 索引残留清零(chunks + file_hashes)+ 下载 404。"""
+    client = TestClient(app)
+    h = {"X-User-Ctx": _INTERNAL}
+    _upload_md(client, h)
+    assert client.post("/admin/kb/business/ingest", headers=h).status_code == 200
+    assert _poll_done(client, "business", h)["status"] == "done"
+    docs = client.get("/admin/kb/business/docs", headers=h).json()
+    assert docs[0]["indexed"] is True
+
+    r = client.delete("/admin/kb/business/docs/guide.md", headers=h)
+    assert r.status_code == 200 and r.json() == {"name": "guide.md", "deleted": True}
+    assert client.get("/admin/kb/business/docs", headers=h).json() == []
+    assert not (kb.kb_src_dir("business") / "guide.md").exists()
+
+    data = json.loads((kb.index_dir() / "business" / "index.json").read_text(encoding="utf-8"))
+    assert "guide.md" not in data["file_hashes"]
+    assert all(c["doc_id"] != "business:guide.md" for c in data["chunks"])
+
+    miss = client.get("/admin/kb/business/docs/guide.md/download", headers=h)
+    assert miss.status_code == 404
+
+
+def test_delete_unicode_name() -> None:
+    client = TestClient(app)
+    h = {"X-User-Ctx": _INTERNAL}
+    _upload_md(client, h, name="资金计划 v1.md")
+    r = client.delete("/admin/kb/business/docs/资金计划 v1.md", headers=h)  # httpx 自动 URL 编码
+    assert r.status_code == 200 and r.json()["deleted"] is True
+    assert client.get("/admin/kb/business/docs", headers=h).json() == []
+
+
+def test_delete_not_found_404() -> None:
+    r = TestClient(app).delete("/admin/kb/business/docs/nope.md", headers={"X-User-Ctx": _INTERNAL})
+    assert r.status_code == 404 and r.json()["code"] == "NOT_FOUND"
+
+
+def test_delete_never_ingested_ok() -> None:
+    # 从未入库(无 index.json):删除成功,且不创建索引文件。
+    client = TestClient(app)
+    h = {"X-User-Ctx": _INTERNAL}
+    _upload_md(client, h)
+    r = client.delete("/admin/kb/business/docs/guide.md", headers=h)
+    assert r.status_code == 200 and r.json()["deleted"] is True
+    assert not (kb.index_dir() / "business" / "index.json").exists()
+
+
+def test_delete_traversal_rejected() -> None:
+    # 端点级:反斜杠变体(%5C 解码后为 ..\evil.md,单段路由可命中处理器;%2F 形式含 / 不匹配路由)。
+    r = TestClient(app).delete(
+        "/admin/kb/business/docs/..%5Cevil.md", headers={"X-User-Ctx": _INTERNAL}
+    )
+    assert r.status_code == 400 and r.json()["code"] == "INVALID_NAME"
+    # 函数级:路径分隔符/穿越一律拒(与 sanitize_doc_name 同口径)。
+    for bad in ["../evil.md", "a/b.md"]:
+        with pytest.raises(kb.KbError):
+            kb.delete_doc("business", bad)
+
+
+def test_delete_during_ingest_409() -> None:
+    client = TestClient(app)
+    h = {"X-User-Ctx": _INTERNAL}
+    _upload_md(client, h)
+    kb._jobs["business"] = kb._IngestJob("business")  # status=running(确定性注入)
+    r = client.delete("/admin/kb/business/docs/guide.md", headers=h)
+    assert r.status_code == 409 and r.json()["code"] == "INGEST_RUNNING"
+    assert (kb.kb_src_dir("business") / "guide.md").is_file()  # 文件未被删

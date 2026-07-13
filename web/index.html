@@ -435,6 +435,7 @@
                 <span class="kb-status" :class="d.indexed ? 'ok' : 'pending'" x-text="d.indexed ? '已入库' : '待入库'"></span>
                 <span class="repo-ops">
                   <button class="btn sm" type="button" :disabled="kbBusy" @click="downloadKbFile(d.name)">下载</button>
+                  <button class="btn sm ghost" type="button" :disabled="kbBusy" @click="removeKbDoc(d.name)">删除</button>
                 </span>
               </div>
             </template>

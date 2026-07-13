@@ -75,6 +75,7 @@ const enc = encodeURIComponent;
 export const listKbDocs = (kb) => http('GET', '/admin/kb/' + enc(kb) + '/docs');
 export const ingestKb = (kb) => http('POST', '/admin/kb/' + enc(kb) + '/ingest');
 export const ingestStatus = (kb) => http('GET', '/admin/kb/' + enc(kb) + '/ingest/status');
+export const deleteKbDoc = (kb, name) => http('DELETE', '/admin/kb/' + enc(kb) + '/docs/' + enc(name));
 export function uploadKbDoc(kb, file) {
   const fd = new FormData();
   fd.append('file', file);
@@ -101,6 +102,7 @@ export function kbErr(e) {
   if (e.status === 401) return '未登录或缺少身份信息';
   if (e.status === 403) return '无权操作(仅内部管理员)';
   if (e.status === 404 && e.code === 'INVALID_KB') return '未知知识库';
+  if (e.status === 404 && e.code === 'NOT_FOUND') return '文档不存在(可能已被删除)';
   if (e.status === 404) return '知识库管理后端待部署';
   if (e.status === 409) return '该知识库正在入库,请稍候';
   if (e.status === 413) return '文件超过上限';
@@ -202,6 +204,15 @@ export function createKb() {
     async downloadKbFile(name) {
       try { await downloadKbDoc(this.kbTab, name); }
       catch (e) { this.kbError = kbErr(e); }
+    },
+
+    async removeKbDoc(name) {
+      if (!window.confirm('删除文档「' + name + '」?将同时从检索索引中移除,不可恢复;知识图谱不随删除自动更新,将在下次「重新入库」时同步。')) return;
+      this.kbBusy = true; this.kbBusyHint = '正在删除…';
+      const kb = this.kbTab; // 先捕获,防 await 期间切页签误刷异库
+      try { await deleteKbDoc(kb, name); await this.refreshKbDocs(kb); }
+      catch (e) { this.kbError = kbErr(e); }
+      finally { this.kbBusy = false; this.kbBusyHint = ''; }
     },
 
     kbFileExtHint() { return KB_FILE_EXTS.join(' / '); },

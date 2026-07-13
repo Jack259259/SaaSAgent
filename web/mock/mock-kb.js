@@ -84,6 +84,17 @@ export function handleKb(method, path, init) {
     return new Response('mock content of ' + name, { status: 200, headers: { 'Content-Type': 'application/octet-stream' } });
   }
 
+  // 删除文档(镜像后端:入库中→409;不存在→404;成功→{name,deleted})。
+  const del = rest.match(/^docs\/([^/]+)$/);
+  if (method === 'DELETE' && del) {
+    const name = decodeURIComponent(del[1]);
+    if (st.ingest && st.ingest.status === 'running') return _json({ code: 'INGEST_RUNNING', message: '该知识库正在入库,请稍候' }, 409);
+    const i = st.docs.findIndex((d) => d.name === name);
+    if (i < 0) return _json({ code: 'NOT_FOUND', message: '文档不存在' }, 404);
+    st.docs.splice(i, 1);
+    return _json({ name, deleted: true });
+  }
+
   return _json({ code: 'NOT_FOUND', message: '未知端点' }, 404);
 }
 

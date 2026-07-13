@@ -40,7 +40,7 @@
     import { createConversationStore, groupByTime } from '../js/store.js';
     import { canManageSkills, validateSkillName, validateSkillZip, splitFrontmatter, SKILL_ZIP_LIMITS, listSkills, createSkill, setSkillStatus, uploadSkillZip, createSkills } from '../js/skills.js';
     import { canManageRepos, validateRepoName, validateRepoUrl, validateRepoArchive, createRepos } from '../js/repos.js';
-    import { canManageKb, isKbInternal, validateKbName, validateKbFile, ingestLabel, isIngestPolling, shouldReloadGraph, listKbDocs, uploadKbDoc, ingestKb, ingestStatus, createKb, KB_UPLOAD_LIMIT } from '../js/kb.js';
+    import { canManageKb, isKbInternal, validateKbName, validateKbFile, ingestLabel, isIngestPolling, shouldReloadGraph, listKbDocs, uploadKbDoc, ingestKb, ingestStatus, deleteKbDoc, kbErr, createKb, KB_UPLOAD_LIMIT } from '../js/kb.js';
     import { _resetKb } from './mock-kb.js';
     import { canAccessIT, typeColorIndex, distinctTypes, edgeKey, sanitizeText, toVisNode, toVisEdge, toVisData, mergeGraph, debounce, getGraph, searchGraph, getGraphNode, createKnowledgeGraph } from '../js/knowledge-graph.js';
 
@@ -490,6 +490,7 @@
     // ingest 状态机(纯函数)。
     assert('kb: isIngestPolling 仅 running 续轮询', isIngestPolling('running') === true && isIngestPolling('done') === false && isIngestPolling('failed') === false && isIngestPolling('idle') === false);
     assert('kb: ingestLabel 文案', ingestLabel('running') === '入库中…' && ingestLabel('done') === '入库完成' && ingestLabel('failed') === '入库失败' && ingestLabel('idle') === '未入库');
+    assert('kb: kbErr 404 分支(NOT_FOUND vs INVALID_KB)', kbErr({ status: 404, code: 'NOT_FOUND' }) === '文档不存在(可能已被删除)' && kbErr({ status: 404, code: 'INVALID_KB' }) === '未知知识库');
 
     // API(mock):内部角色全流程 + IT 库细 ACL。
     _resetKb();
@@ -502,9 +503,15 @@
     await assertAsync('kb api: 下载已上传文档 200', async () => { const ctx = { tenant_id: 't', user_id: 'u', roles: ['internal_dev'], data_scope: {}, permissions: [] }; const res = await fetch('/admin/kb/business/docs/guide.md/download', { headers: { 'X-User-Ctx': JSON.stringify(ctx) } }); return res.ok; });
     await assertAsync('kb api: 非法 kb→404 INVALID_KB(防注入)', async () => { try { await listKbDocs('evil'); return false; } catch (e) { return e.status === 404 && e.code === 'INVALID_KB'; } });
 
+    // 删除:入库中 409 → 完成后删除成功 → 列表移除 → 再删 404。
+    await assertAsync('kb api: 入库中 delete→409 INGEST_RUNNING', async () => { await ingestKb('business'); try { await deleteKbDoc('business', 'guide.md'); return false; } catch (e) { return e.status === 409 && e.code === 'INGEST_RUNNING'; } });
+    await assertAsync('kb api: delete→200 且列表移除', async () => { await ingestStatus('business'); const r = await deleteKbDoc('business', 'guide.md'); const docs = await listKbDocs('business'); return r.deleted === true && !docs.some((d) => d.name === 'guide.md'); });
+    await assertAsync('kb api: delete 不存在→404 NOT_FOUND', async () => { try { await deleteKbDoc('business', 'nope.md'); return false; } catch (e) { return e.status === 404 && e.code === 'NOT_FOUND'; } });
+
     // IT 库细 ACL:非内部管理员→403;内部→200。
     setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['kb_admin'], data_scope: {}, permissions: [] });
     await assertAsync('kb api: 非内部访 it_design→403', async () => { try { await listKbDocs('it_design'); return false; } catch (e) { return e.status === 403; } });
+    await assertAsync('kb api: 非内部 delete it_design→403', async () => { try { await deleteKbDoc('it_design', 'x.md'); return false; } catch (e) { return e.status === 403; } });
     setUserCtx({ tenant_id: 't', user_id: 'u', roles: ['internal_dev'], data_scope: {}, permissions: [] });
     await assertAsync('kb api: 内部访 it_design→200', async () => Array.isArray(await listKbDocs('it_design')));
     setUserCtx(null);

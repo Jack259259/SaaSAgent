@@ -390,6 +390,18 @@ async def kb_download(
     return FileResponse(path, filename=path.name)
 
 
+@app.delete("/admin/kb/{kb_name}/docs/{name}", response_model=None)
+async def kb_delete_doc(
+    kb_name: str,
+    name: str,
+    user_ctx: Annotated[UserCtx, Depends(require_kb_admin)],
+    trace_id: Annotated[str, Depends(get_trace_id)],
+) -> dict[str, Any] | JSONResponse:
+    """删除文档(物理文件 + 检索索引;入库中→409)。知识图谱不随删自动重建,靠下次 ingest 同步。"""
+    _check_kb_access(kb_name, user_ctx, trace_id)
+    return _kb_op("delete", user_ctx, trace_id, lambda: kb.delete_doc(kb_name, name))
+
+
 @app.post("/admin/kb/{kb_name}/ingest", response_model=None)
 async def kb_ingest(
     kb_name: str,
