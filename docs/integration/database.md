@@ -3,6 +3,14 @@
 data-svc 取数走**只读账号 + 校验层(禁 DML/DDL)+ 强制租户谓词注入**(红线 6)。真实库本阶段不连接;
 下列步骤在对接时人工执行。校验层(`data_svc/validator.py`)无论是否连库都生效,**无"测试态放行"开关**。
 
+## 0. 先选执行器形态(FP_DATA_EXECUTOR,见 config/app.yml)
+
+- 留空 / `"postgres"` = `PostgresExecutor`(`DB_DSN_READONLY`,本文其余章节适用);
+- `"user_func"` = **用户自有执行代码**(GaussDB 场景当前路线):替换
+  `data_svc/user_executor.py` 的 `run_sql(sql)->DataFrame` 函数体即可,接入点与要求见
+  `docs/integration/wrenai.md`「用户执行代码接入点」。该形态下 §1/§3 的只读账号与
+  statement_timeout 责任落在你的 run_sql 实现(红线 6 第三保障),§2 白名单/RLS 登记照常适用。
+
 ## 1. 建只读账号(PostgreSQL 示例)
 
 ```sql

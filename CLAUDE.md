@@ -8,6 +8,7 @@
 > v0.5(2026-06-15):阶段 4–10 全部落地(sandbox/rag/data/code/sop/memory/scheduler/reflection 八服务 + 评估套件 `evals/`(evalkit + 5 集)+ 全链路 trace(`packages/llm/tracing.py`)+ `tests/security` 负例总套件);eval 达标阈值入 `evals/README.md`;CI 增 eval E=e2e + security 门禁;v0 验收见 `docs/acceptance-v0.md`;§12 收敛为生产接入项。
 > v0.5.1(2026-06-15):红线评审(HEAD~4)收口 —— 澄清红线 4 助手域副作用口径:外发/跨会话(notify/schedule)确认或订阅制,会话内记忆/草稿(save_memory/write_workspace)门槛+审计+租户隔离治理(隐含同意)。无代码改动。
 > v0.6(2026-06-16):内嵌前端 `web/`(原生 HTML/CSS + Alpine,零构建,同源同部署)W0–W4 全落地;§1 概述+指针、§2 红线 14、§3 仓库树+映射、§4 前端验证不走 make、§12 后端待补端点登记;agent-gateway 加静态伺服 + SPA 回退(`FP_DEV_STUB` 开发桩)。
+> v0.7(2026-07-14):嵌入式 WrenAI Text-to-SQL 落地(官方托管栈已 sunset):`WrenLocalEngine`(统一 LLM 通道生成 + wren strict dry_plan 校验/方言转换)+ `assets/semantic-layer/wren/` 语义层资产 + `run_sql(sql)->DataFrame` 用户执行接入函数(`FP_NL2SQL_ENGINE` / `FP_DATA_EXECUTOR`);校验层同名 CTE 遮蔽缺口修复;§12.1 更新。详见 `docs/integration/wrenai.md`。
 
 ## 1. 项目概述
 
@@ -140,7 +141,7 @@ make sop-validate    # assets/sops schema 校验 + 静态交叉校验
 
 v0 为离线自洽闭环(全部 fixture/stub)。投产前的真实接入(均已留契约/适配位):
 
-1. **数据库对接**:data-svc 接只读库账号 + WrenAI(`WREN_API_URL` / `DB_DSN_READONLY`;PostgresExecutor / WrenAdapter 已留),并核对真实语义层 MDL(替换虚构 3 表)。
+1. **数据库对接**:嵌入式 WrenAI Text-to-SQL **已落地**(`WrenLocalEngine` + `assets/semantic-layer/wren/`,`FP_NL2SQL_ENGINE=wren_local`;官方托管栈已 sunset,`WrenAdapter`/`WREN_API_URL` 仅 legacy)。剩余:用户以真实 GaussDB 实现替换 `data_svc/user_executor.py` 的 `run_sql` 函数体(`FP_DATA_EXECUTOR=user_func`,或配 `DB_DSN_READONLY` 走 PostgresExecutor)、真实业务表 MDL 替换虚构 3 表(模板见 `assets/semantic-layer/wren/README.md`)、**确认 GaussDB 兼容模式(PG/ORA/MySQL)**。详见 `docs/integration/wrenai.md`。
 2. **知识上传**:rag-svc 真实文档摄取与 LightRAG 后端(`LightRagStore` 已留);按租户/ACL 灌库。**知识图谱建图+读图已端到端打通**(`lightrag-hku` 可选依赖 + 真实 LLM + `FP_KB_GRAPH_ENGINE=lightrag`,Stage 2);检索 `LightRagStore.search` 仍待生产化。
 3. **代码仓放入**:code-svc 索引真实只读仓(`index_repos` 已就位),配置受控仓清单。
 4. **生产沙箱**:run_analysis 用 `ContainerRunner` 替换开发态 `SubprocessRunner`(强隔离落地)。
