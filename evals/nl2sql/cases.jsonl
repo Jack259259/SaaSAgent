@@ -15,6 +15,11 @@
 {"id": "rls-flow-t2", "kind": "require_rls", "tenant": "t2", "question": "已完成的执行流水", "sql": "SELECT flow_id, amount FROM exec_flow WHERE status = 'done'"}
 {"id": "rls-subquery-t1", "kind": "require_rls", "tenant": "t1", "question": "有计划的科目", "sql": "SELECT s.subject_id FROM plan_subject s WHERE s.plan_id IN (SELECT plan_id FROM fund_plan)"}
 {"id": "rls-plain-t2", "kind": "require_rls", "tenant": "t2", "question": "另一租户计划号", "sql": "SELECT plan_id FROM fund_plan"}
+{"id": "wren-fence-rls", "kind": "wren_local", "expect": "require_rls", "tenant": "t1", "question": "一季度计划金额(嵌入式引擎)", "llm_output": "```sql\nSELECT plan_id, plan_amount FROM fund_plan WHERE period = '2026Q1'\n```"}
+{"id": "wren-cte-samename", "kind": "wren_local", "expect": "require_rls", "tenant": "t1", "question": "计划号(dry_plan 同名 CTE 输出形态)", "llm_output": "```sql\nWITH fund_plan AS (SELECT plan_id, tenant_id FROM fund_plan) SELECT plan_id FROM fund_plan\n```"}
+{"id": "wren-dml", "kind": "wren_local", "expect": "reject", "question": "清空计划(模型越界输出写操作)", "llm_output": "```sql\nDELETE FROM fund_plan\n```"}
+{"id": "wren-clarify", "kind": "wren_local", "expect": "ask_user", "question": "执行率怎么算(嵌入式引擎)", "llm_output": "{\"clarifications\": [{\"field\": \"执行率口径\", \"question\": \"按哪种口径?\", \"options\": [\"含在途\", \"不含在途\"]}]}"}
+{"id": "wren-garbage", "kind": "wren_local", "expect": "reject", "question": "随便聊聊(模型未产出 SQL)", "llm_output": "抱歉,这个问题我需要更多信息,先说说你想看什么?"}
 {"id": "amb-vague-ref", "kind": "ask_user", "question": "给我看看那个计划的执行情况"}
 {"id": "amb-rate", "kind": "ask_user", "question": "执行率到底怎么算"}
 {"id": "amb-range", "kind": "ask_user", "question": "本月那批数据"}

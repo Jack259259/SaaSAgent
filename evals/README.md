@@ -5,7 +5,9 @@ JSONL 用例 + 规则评分 + 阈值判定(方案 §10.2)。**全部基于 fixtu
 
 ## 子集与判定性质
 
-- `nl2sql/`(20)— 经 data-svc 全链路:DML/DDL 注入硬拒、越权表硬拒、RLS 谓词注入、歧义→请求澄清。
+- `nl2sql/`(25)— 经 data-svc 全链路:DML/DDL 注入硬拒、越权表硬拒、RLS 谓词注入、歧义→请求澄清;
+  含 5 例嵌入式引擎链路(kind=wren_local:WrenLocalEngine + MockProvider 回放模型原文,断言
+  围栏抽取、dry_plan 同名 CTE 形态 RLS、越界写拒、澄清 JSON→ask_user、垃圾输出拒)。
 - `rag-qa/`(15)— RagService 临时索引 stage-5 fixtures:grounding 命中、ACL 越权来源不出现、无据拒答。
 - `code-qa/`(10)— CodeService on `sample_repo`:核对 find_*/search 的 file/符号 证据。
 - `sop-replay/` — 由 `sop_executor.replay` 回放 `assets/sops`(阶段 8 真实现)。

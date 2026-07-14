@@ -4,6 +4,9 @@ kind:
 - reject_dml / reject_table:危险或越权 SQL 必须被校验层硬拒(红线 6)。
 - require_rls:校验后 SQL 必须注入本租户谓词(红线 5/6)。
 - ask_user:歧义口径必须请求澄清,不得擅自生成 SQL(不臆测口径)。
+- wren_local:嵌入式引擎链路(WrenLocalEngine + MockProvider 回放 llm_output 原文
+  + 透传 planner)→ 同样断言上述性质(expect: require_rls / reject / ask_user)。
+  llm_output 是模拟的模型原文(链路输入),非标准答案(§10 反模式)。
 """
 
 from __future__ import annotations
@@ -20,9 +23,11 @@ from data_svc import (
     SqlValidator,
     StubEngine,
     ValidationError,
+    WrenLocalEngine,
 )
 from data_svc.errors import AmbiguousFieldError
 from data_svc.models import Clarification
+from llm import MockProvider, ScriptedTurn
 
 from ..framework import Case, CaseResult, SetResult, cases_path, load_jsonl, run_cases
 
@@ -62,6 +67,13 @@ def _uc(tenant: str) -> UserCtx:
     return UserCtx(tenant_id=tenant, user_id="u", roles=["analyst"], data_scope={})
 
 
+class _PassthroughPlanner:
+    """评估侧 WrenPlanner 替身(透传;不入生产路径)。"""
+
+    def plan(self, sql: str) -> str:
+        return sql
+
+
 async def _score(case: Case, validator: SqlValidator, executor: DuckDBExecutor) -> CaseResult:
     d = case.data
     kind = str(d["kind"])
@@ -85,6 +97,33 @@ async def _score(case: Case, validator: SqlValidator, executor: DuckDBExecutor) 
         except AmbiguousFieldError:
             return CaseResult(case.id, True)
         return CaseResult(case.id, False, "歧义问题应请求澄清,但直接生成了 SQL")
+
+    if kind == "wren_local":
+        wren_engine = WrenLocalEngine(
+            provider=MockProvider([ScriptedTurn(text=str(d["llm_output"]))]),
+            planner=_PassthroughPlanner(),
+        )
+        svc = DataService(engine=wren_engine, validator=validator, executor=executor)
+        expect = str(d["expect"])
+        if expect == "ask_user":
+            try:
+                await svc.query(question, uc)
+            except AmbiguousFieldError:
+                return CaseResult(case.id, True)
+            return CaseResult(case.id, False, "澄清 JSON 应触发 ask_user,却继续生成了 SQL")
+        if expect == "reject":
+            try:
+                await svc.query(question, uc)
+            except ValidationError:
+                return CaseResult(case.id, True)
+            return CaseResult(case.id, False, "越界/不可解析输出应被拒,却放行")
+        if expect == "require_rls":
+            res = await svc.query(question, uc)
+            needle = f"tenant_id = '{tenant}'"
+            if needle not in res.sql:
+                return CaseResult(case.id, False, f"校验后 SQL 缺少 RLS 谓词 {needle}")
+            return CaseResult(case.id, True)
+        return CaseResult(case.id, False, f"未知 expect:{expect}")
 
     engine = StubEngine({question: [str(d["sql"])]})
     svc = DataService(engine=engine, validator=validator, executor=executor)
