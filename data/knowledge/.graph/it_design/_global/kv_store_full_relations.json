@@ -1,0 +1,50 @@
+{
+  "it_design:README.md": {
+    "relation_pairs": [
+      [
+        "Git",
+        "It Design Knowledge Base Upload Area"
+      ],
+      [
+        ".Gitignore",
+        "This Readme"
+      ],
+      [
+        "Internal Role",
+        "Scheme §9.1"
+      ],
+      [
+        ".Gitignore",
+        "It Design Knowledge Base Upload Area"
+      ],
+      [
+        "It Design Knowledge Base Upload Area",
+        "Rag-Svc"
+      ],
+      [
+        "It Design Knowledge Base Upload Area",
+        "Knowledge-Upload.Md"
+      ],
+      [
+        "Internal Role",
+        "It Design Knowledge Base Upload Area"
+      ],
+      [
+        "Business Library",
+        "It Design Knowledge Base Upload Area"
+      ],
+      [
+        "It Design Library",
+        "Rag-Svc"
+      ],
+      [
+        "Git",
+        "This Readme"
+      ]
+    ],
+    "count": 10,
+    "create_time": 1784350807,
+    "update_time": 1784350807,
+    "_id": "it_design:README.md"
+  }
+}

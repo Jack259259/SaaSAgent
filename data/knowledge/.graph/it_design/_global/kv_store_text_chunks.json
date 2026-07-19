@@ -1,0 +1,16 @@
+{
+  "it_design:README.md-chunk-000": {
+    "tokens": 120,
+    "content": "# data/knowledge/it-design — IT 设计知识库上传区(人工)\n\n此目录由**人工上传** IT 设计/技术文档,供 rag-svc 的 it_design 库摄取。\n默认仅 internal 角色可检索(方案 §9.1)。\n\n- **真实数据不入库**:除本 README 外,本目录内容被 `.gitignore` 忽略,不进 git。\n- 上传规范与摄取命令同 business 库,见 `docs/integration/knowledge-upload.md`(阶段 5 补)。",
+    "chunk_order_index": 0,
+    "full_doc_id": "it_design:README.md",
+    "file_path": "README.md",
+    "llm_cache_list": [
+      "default:extract:1e3aad99c95f5928f02a5d526527b606",
+      "default:extract:a58b168db071e1cd4e4590709c01d4f5"
+    ],
+    "create_time": 1784350651,
+    "update_time": 1784350807,
+    "_id": "it_design:README.md-chunk-000"
+  }
+}

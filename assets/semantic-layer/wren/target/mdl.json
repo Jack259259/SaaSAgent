@@ -1,0 +1,240 @@
+{
+  "catalog": "wren",
+  "schema": "public",
+  "models": [
+    {
+      "name": "exec_flow",
+      "tableReference": {
+        "catalog": "",
+        "schema": "",
+        "table": "exec_flow"
+      },
+      "columns": [
+        {
+          "name": "flow_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "isPrimaryKey": true,
+          "properties": {}
+        },
+        {
+          "name": "tenant_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "plan_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {
+            "description": "所属资金计划(fund_plan.plan_id)"
+          }
+        },
+        {
+          "name": "exec_date",
+          "type": "DATE",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {
+            "description": "执行日期"
+          }
+        },
+        {
+          "name": "amount",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "流水金额(元)"
+          }
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "流水状态:SUCCESS / FAILED / PENDING"
+          }
+        }
+      ],
+      "primaryKey": "flow_id",
+      "cached": false,
+      "properties": {
+        "description": "执行流水:资金计划的逐笔执行记录"
+      }
+    },
+    {
+      "name": "fund_plan",
+      "tableReference": {
+        "catalog": "",
+        "schema": "",
+        "table": "fund_plan"
+      },
+      "columns": [
+        {
+          "name": "plan_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "isPrimaryKey": true,
+          "properties": {}
+        },
+        {
+          "name": "tenant_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "org_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "period",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {
+            "description": "期间,格式如 2026Q1"
+          }
+        },
+        {
+          "name": "plan_amount",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "计划金额(元)"
+          }
+        },
+        {
+          "name": "exec_amount",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "执行金额(元)"
+          }
+        },
+        {
+          "name": "currency",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        },
+        {
+          "name": "version",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "计划版本号"
+          }
+        }
+      ],
+      "primaryKey": "plan_id",
+      "cached": false,
+      "properties": {
+        "description": "资金计划主表:每行一个组织在一个期间的一版资金计划"
+      }
+    },
+    {
+      "name": "plan_subject",
+      "tableReference": {
+        "catalog": "",
+        "schema": "",
+        "table": "plan_subject"
+      },
+      "columns": [
+        {
+          "name": "subject_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "isPrimaryKey": true,
+          "properties": {}
+        },
+        {
+          "name": "tenant_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {}
+        },
+        {
+          "name": "plan_id",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {
+            "description": "所属资金计划(fund_plan.plan_id)"
+          }
+        },
+        {
+          "name": "subject_code",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": true,
+          "properties": {
+            "description": "科目编码"
+          }
+        },
+        {
+          "name": "subject_name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        },
+        {
+          "name": "amount",
+          "type": "DECIMAL",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {
+            "description": "科目金额(元)"
+          }
+        }
+      ],
+      "primaryKey": "subject_id",
+      "cached": false,
+      "properties": {
+        "description": "计划科目明细:资金计划按科目拆分的金额"
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "name": "plan_subject_fund_plan",
+      "models": [
+        "plan_subject",
+        "fund_plan"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "plan_subject.plan_id = fund_plan.plan_id"
+    },
+    {
+      "name": "exec_flow_fund_plan",
+      "models": [
+        "exec_flow",
+        "fund_plan"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "exec_flow.plan_id = fund_plan.plan_id"
+    }
+  ],
+  "views": [],
+  "cubes": [],
+  "dataSource": "postgres",
+  "layoutVersion": 3
+}

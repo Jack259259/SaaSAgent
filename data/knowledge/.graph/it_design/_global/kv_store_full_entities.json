@@ -1,0 +1,20 @@
+{
+  "it_design:README.md": {
+    "entity_names": [
+      "It Design Knowledge Base Upload Area",
+      "Rag-Svc",
+      "Scheme §9.1",
+      ".Gitignore",
+      "Git",
+      "Knowledge-Upload.Md",
+      "Business Library",
+      "It Design Library",
+      "This Readme",
+      "Internal Role"
+    ],
+    "count": 10,
+    "create_time": 1784350807,
+    "update_time": 1784350807,
+    "_id": "it_design:README.md"
+  }
+}

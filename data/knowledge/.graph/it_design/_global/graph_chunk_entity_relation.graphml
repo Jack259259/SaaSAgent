@@ -1,0 +1,199 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d13" for="edge" attr.name="truncate" attr.type="string" />
+  <key id="d12" for="edge" attr.name="created_at" attr.type="long" />
+  <key id="d11" for="edge" attr.name="file_path" attr.type="string" />
+  <key id="d10" for="edge" attr.name="source_id" attr.type="string" />
+  <key id="d9" for="edge" attr.name="keywords" attr.type="string" />
+  <key id="d8" for="edge" attr.name="description" attr.type="string" />
+  <key id="d7" for="edge" attr.name="weight" attr.type="double" />
+  <key id="d6" for="node" attr.name="truncate" attr.type="string" />
+  <key id="d5" for="node" attr.name="created_at" attr.type="long" />
+  <key id="d4" for="node" attr.name="file_path" attr.type="string" />
+  <key id="d3" for="node" attr.name="source_id" attr.type="string" />
+  <key id="d2" for="node" attr.name="description" attr.type="string" />
+  <key id="d1" for="node" attr.name="entity_type" attr.type="string" />
+  <key id="d0" for="node" attr.name="entity_id" attr.type="string" />
+  <graph edgedefault="undirected">
+    <node id="It Design Knowledge Base Upload Area">
+      <data key="d0">It Design Knowledge Base Upload Area</data>
+      <data key="d1">location</data>
+      <data key="d2">A directory at data/knowledge/it-design intended for manually uploaded IT design and technical documents, ingested by Rag-Svc into the It Design Library.</data>
+      <data key="d3">it_design:README.md-chunk-000</data>
+      <data key="d4">README.md</data>
+      <data key="d5">1784350807</data>
+      <data key="d6" />
+    </node>
+    <node id="Rag-Svc">
+      <data key="d0">Rag-Svc</data>
+      <data key="d1">artifact</data>
+      <data key="d2">A service that ingests content from the IT Design Knowledge Base Upload Area into the It Design Library.</data>
+      <data key="d3">it_design:README.md-chunk-000</data>
+      <data key="d4">README.md</data>
+      <data key="d5">1784350807</data>
+      <data key="d6" />
+    </node>
+    <node id="It Design Library">
+      <data key="d0">It Design Library</data>
+      <data key="d1">content</data>
+      <data key="d2">The knowledge base within Rag-Svc that stores ingested IT design and technical documents.</data>
+      <data key="d3">it_design:README.md-chunk-000</data>
+      <data key="d4">README.md</data>
+      <data key="d5">1784350807</data>
+      <data key="d6" />
+    </node>
+    <node id="Internal Role">
+      <data key="d0">Internal Role</data>
+      <data key="d1">concept</data>
+      <data key="d2">The default role granted retrieval access to the IT Design Knowledge Base Upload Area content.</data>
+      <data key="d3">it_design:README.md-chunk-000</data>
+      <data key="d4">README.md</data>
+      <data key="d5">1784350807</data>
+      <data key="d6" />
+    </node>
+    <node id="Scheme §9.1">
+      <data key="d0">Scheme §9.1</data>
+      <data key="d1">content</data>
+      <data key="d2">A section of a scheme that defines the default access permissions for the internal role.</data>
+      <data key="d3">it_design:README.md-chunk-000</data>
+      <data key="d4">README.md</data>
+      <data key="d5">1784350807</data>
+      <data key="d6" />
+    </node>
+    <node id="Business Library">
+      <data key="d0">Business Library</data>
+      <data key="d1">content</data>
+      <data key="d2">A separate knowledge base whose upload specifications and ingestion commands are reused for the IT Design Knowledge Base Upload Area.</data>
+      <data key="d3">it_design:README.md-chunk-000</data>
+      <data key="d4">README.md</data>
+      <data key="d5">1784350807</data>
+      <data key="d6" />
+    </node>
+    <node id="Knowledge-Upload.Md">
+      <data key="d0">Knowledge-Upload.Md</data>
+      <data key="d1">content</data>
+      <data key="d2">A document located at docs/integration/knowledge-upload.md that details the upload specifications and ingestion commands for both the IT Design and Business libraries.</data>
+      <data key="d3">it_design:README.md-chunk-000</data>
+      <data key="d4">README.md</data>
+      <data key="d5">1784350807</data>
+      <data key="d6" />
+    </node>
+    <node id=".Gitignore">
+      <data key="d0">.Gitignore</data>
+      <data key="d1">artifact</data>
+      <data key="d2">A configuration file that ignores the content of the IT Design Knowledge Base Upload Area directory, except for the README, preventing it from being tracked in Git.</data>
+      <data key="d3">it_design:README.md-chunk-000</data>
+      <data key="d4">README.md</data>
+      <data key="d5">1784350807</data>
+      <data key="d6" />
+    </node>
+    <node id="Git">
+      <data key="d0">Git</data>
+      <data key="d1">artifact</data>
+      <data key="d2">The version control system from which real data in the IT Design Knowledge Base Upload Area is excluded.</data>
+      <data key="d3">it_design:README.md-chunk-000</data>
+      <data key="d4">README.md</data>
+      <data key="d5">1784350807</data>
+      <data key="d6" />
+    </node>
+    <node id="This Readme">
+      <data key="d0">This Readme</data>
+      <data key="d1">content</data>
+      <data key="d2">The README file located in the IT Design Knowledge Base Upload Area, which is explicitly excluded from the .gitignore ignore rule and therefore tracked by Git.</data>
+      <data key="d3">it_design:README.md-chunk-000</data>
+      <data key="d4">README.md</data>
+      <data key="d5">1784350807</data>
+      <data key="d6" />
+    </node>
+    <edge source="It Design Knowledge Base Upload Area" target="Rag-Svc">
+      <data key="d7">1.0</data>
+      <data key="d8">The content of the IT Design Knowledge Base Upload Area is ingested by Rag-Svc into the It Design Library.</data>
+      <data key="d9">content_provided_to,ingestion</data>
+      <data key="d10">it_design:README.md-chunk-000</data>
+      <data key="d11">README.md</data>
+      <data key="d12">1784350807</data>
+      <data key="d13" />
+    </edge>
+    <edge source="It Design Knowledge Base Upload Area" target="Internal Role">
+      <data key="d7">1.0</data>
+      <data key="d8">By default, only the internal role can retrieve content from the IT Design Knowledge Base Upload Area.</data>
+      <data key="d9">has_access_to</data>
+      <data key="d10">it_design:README.md-chunk-000</data>
+      <data key="d11">README.md</data>
+      <data key="d12">1784350807</data>
+      <data key="d13" />
+    </edge>
+    <edge source="It Design Knowledge Base Upload Area" target="Business Library">
+      <data key="d7">1.0</data>
+      <data key="d8">The upload specifications and ingestion commands for the IT Design Knowledge Base Upload Area are identical to those of the Business Library.</data>
+      <data key="d9">shares_upload_specifications</data>
+      <data key="d10">it_design:README.md-chunk-000</data>
+      <data key="d11">README.md</data>
+      <data key="d12">1784350807</data>
+      <data key="d13" />
+    </edge>
+    <edge source="It Design Knowledge Base Upload Area" target="Knowledge-Upload.Md">
+      <data key="d7">1.0</data>
+      <data key="d8">The upload specifications for the IT Design Knowledge Base Upload Area are documented in Knowledge-Upload.Md.</data>
+      <data key="d9">documented_in</data>
+      <data key="d10">it_design:README.md-chunk-000</data>
+      <data key="d11">README.md</data>
+      <data key="d12">1784350807</data>
+      <data key="d13" />
+    </edge>
+    <edge source="It Design Knowledge Base Upload Area" target=".Gitignore">
+      <data key="d7">1.0</data>
+      <data key="d8">All content in the IT Design Knowledge Base Upload Area except the README is ignored by .gitignore and not tracked in Git.</data>
+      <data key="d9">ignored_by</data>
+      <data key="d10">it_design:README.md-chunk-000</data>
+      <data key="d11">README.md</data>
+      <data key="d12">1784350807</data>
+      <data key="d13" />
+    </edge>
+    <edge source="It Design Knowledge Base Upload Area" target="Git">
+      <data key="d7">1.0</data>
+      <data key="d8">Real data in the IT Design Knowledge Base Upload Area is excluded from Git.</data>
+      <data key="d9">excluded_from</data>
+      <data key="d10">it_design:README.md-chunk-000</data>
+      <data key="d11">README.md</data>
+      <data key="d12">1784350807</data>
+      <data key="d13" />
+    </edge>
+    <edge source="Rag-Svc" target="It Design Library">
+      <data key="d7">1.0</data>
+      <data key="d8">Rag-Svc ingests content from the upload area into the It Design Library.</data>
+      <data key="d9">ingests_into</data>
+      <data key="d10">it_design:README.md-chunk-000</data>
+      <data key="d11">README.md</data>
+      <data key="d12">1784350807</data>
+      <data key="d13" />
+    </edge>
+    <edge source="Internal Role" target="Scheme §9.1">
+      <data key="d7">1.0</data>
+      <data key="d8">Scheme §9.1 specifies the default retrieval permissions for the internal role.</data>
+      <data key="d9">defines_access_control</data>
+      <data key="d10">it_design:README.md-chunk-000</data>
+      <data key="d11">README.md</data>
+      <data key="d12">1784350807</data>
+      <data key="d13" />
+    </edge>
+    <edge source=".Gitignore" target="This Readme">
+      <data key="d7">1.0</data>
+      <data key="d8">The .gitignore file does not ignore this README, unlike the rest of the directory content.</data>
+      <data key="d9">not_ignored_by</data>
+      <data key="d10">it_design:README.md-chunk-000</data>
+      <data key="d11">README.md</data>
+      <data key="d12">1784350807</data>
+      <data key="d13" />
+    </edge>
+    <edge source="Git" target="This Readme">
+      <data key="d7">1.0</data>
+      <data key="d8">As the README is not ignored by .gitignore, it is tracked by Git.</data>
+      <data key="d9">tracked_by</data>
+      <data key="d10">it_design:README.md-chunk-000</data>
+      <data key="d11">README.md</data>
+      <data key="d12">1784350807</data>
+      <data key="d13" />
+    </edge>
+  </graph>
+</graphml>

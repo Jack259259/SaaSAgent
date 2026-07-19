@@ -1,0 +1,92 @@
+{
+  "It Design Knowledge Base Upload Area<SEP>Rag-Svc": {
+    "chunk_ids": [
+      "it_design:README.md-chunk-000"
+    ],
+    "count": 1,
+    "create_time": 1784350807,
+    "update_time": 1784350807,
+    "_id": "It Design Knowledge Base Upload Area<SEP>Rag-Svc"
+  },
+  "It Design Library<SEP>Rag-Svc": {
+    "chunk_ids": [
+      "it_design:README.md-chunk-000"
+    ],
+    "count": 1,
+    "create_time": 1784350807,
+    "update_time": 1784350807,
+    "_id": "It Design Library<SEP>Rag-Svc"
+  },
+  "Internal Role<SEP>It Design Knowledge Base Upload Area": {
+    "chunk_ids": [
+      "it_design:README.md-chunk-000"
+    ],
+    "count": 1,
+    "create_time": 1784350807,
+    "update_time": 1784350807,
+    "_id": "Internal Role<SEP>It Design Knowledge Base Upload Area"
+  },
+  "Business Library<SEP>It Design Knowledge Base Upload Area": {
+    "chunk_ids": [
+      "it_design:README.md-chunk-000"
+    ],
+    "count": 1,
+    "create_time": 1784350807,
+    "update_time": 1784350807,
+    "_id": "Business Library<SEP>It Design Knowledge Base Upload Area"
+  },
+  "Internal Role<SEP>Scheme §9.1": {
+    "chunk_ids": [
+      "it_design:README.md-chunk-000"
+    ],
+    "count": 1,
+    "create_time": 1784350807,
+    "update_time": 1784350807,
+    "_id": "Internal Role<SEP>Scheme §9.1"
+  },
+  "It Design Knowledge Base Upload Area<SEP>Knowledge-Upload.Md": {
+    "chunk_ids": [
+      "it_design:README.md-chunk-000"
+    ],
+    "count": 1,
+    "create_time": 1784350807,
+    "update_time": 1784350807,
+    "_id": "It Design Knowledge Base Upload Area<SEP>Knowledge-Upload.Md"
+  },
+  ".Gitignore<SEP>It Design Knowledge Base Upload Area": {
+    "chunk_ids": [
+      "it_design:README.md-chunk-000"
+    ],
+    "count": 1,
+    "create_time": 1784350807,
+    "update_time": 1784350807,
+    "_id": ".Gitignore<SEP>It Design Knowledge Base Upload Area"
+  },
+  "Git<SEP>It Design Knowledge Base Upload Area": {
+    "chunk_ids": [
+      "it_design:README.md-chunk-000"
+    ],
+    "count": 1,
+    "create_time": 1784350807,
+    "update_time": 1784350807,
+    "_id": "Git<SEP>It Design Knowledge Base Upload Area"
+  },
+  ".Gitignore<SEP>This Readme": {
+    "chunk_ids": [
+      "it_design:README.md-chunk-000"
+    ],
+    "count": 1,
+    "create_time": 1784350807,
+    "update_time": 1784350807,
+    "_id": ".Gitignore<SEP>This Readme"
+  },
+  "Git<SEP>This Readme": {
+    "chunk_ids": [
+      "it_design:README.md-chunk-000"
+    ],
+    "count": 1,
+    "create_time": 1784350807,
+    "update_time": 1784350807,
+    "_id": "Git<SEP>This Readme"
+  }
+}
